@@ -1,0 +1,71 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build with stack",
+            "type": "shell",
+            "command": "stack build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "Test with stack",
+            "type": "shell",
+            "command": "stack test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "problemMatcher": [],
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "Run with stack",
+            "type": "shell",
+            "command": "stack run olang ${input:programpath}",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "problemMatcher": [],
+            "group": {
+                "kind": "none",
+                "isDefault": true
+            },
+        },
+        {
+            "label": "Debug with stack",
+            "type": "shell",
+            "command": "stack run olang-debug ${input:programpath}",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "problemMatcher": [],
+            "group": {
+                "kind": "none",
+                "isDefault": true
+            },
+        }
+    ],
+    "inputs": [
+        {
+            "id": "programpath",
+            "description": "Input program path for interpreter:",
+            "default": "./resources/example-programs/ackermann.olang",
+            "type": "promptString"
+        }
+    ]
+}
