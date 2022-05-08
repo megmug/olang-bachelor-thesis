@@ -1,5 +1,6 @@
 {
     "recommendations": [
-        "haskell.haskell"
+        "haskell.haskell",
+        "arrterian.nix-env-selector"
     ]
 }

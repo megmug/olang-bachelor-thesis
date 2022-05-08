@@ -1,0 +1,18 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"nixEnvSelector.suggestion": false,
+		"nixEnvSelector.nixFile": "${workspaceRoot}/shell.nix",
+		"terminal.integrated.defaultProfile.linux": "nix-shell",
+		"terminal.integrated.profiles.linux": {
+			"nix-shell": {
+				"path": "nix-shell",
+				"icon": "terminal-bash"
+			}
+		}
+	}
+}

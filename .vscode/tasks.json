@@ -6,7 +6,16 @@
         {
             "label": "Build with stack",
             "type": "shell",
-            "command": "stack build",
+            "command": "stack",
+            "args": [
+                "build"
+            ],
+            "options": {
+                "shell": {
+                    "executable" : "nix-shell",
+                    "args": ["--command"]
+                }
+            },
             "presentation": {
                 "reveal": "always",
                 "panel": "new"
@@ -20,7 +29,16 @@
         {
             "label": "Test with stack",
             "type": "shell",
-            "command": "stack test",
+            "command": "stack",
+            "args": [
+                "test"
+            ],
+            "options": {
+                "shell": {
+                    "executable" : "nix-shell",
+                    "args": ["--command"]
+                }
+            },
             "presentation": {
                 "reveal": "always",
                 "panel": "new"
@@ -34,7 +52,18 @@
         {
             "label": "Run with stack",
             "type": "shell",
-            "command": "stack run olang ${input:programpath}",
+            "command": "stack",
+            "args" : [
+                "run",
+                "olang",
+                "${input:programpath}"
+            ],
+            "options": {
+                "shell": {
+                    "executable" : "nix-shell",
+                    "args": ["--command"]
+                }
+            },
             "presentation": {
                 "reveal": "always",
                 "panel": "new"
@@ -48,7 +77,18 @@
         {
             "label": "Debug with stack",
             "type": "shell",
-            "command": "stack run olang-debug ${input:programpath}",
+            "command": "stack",
+            "args" : [
+                "run",
+                "olang-debug",
+                "${input:programpath}"
+            ],
+            "options": {
+                "shell": {
+                    "executable" : "nix-shell",
+                    "args": ["--command"]
+                }
+            },
             "presentation": {
                 "reveal": "always",
                 "panel": "new"
