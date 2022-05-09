@@ -7,15 +7,44 @@
 
 module Parser where
 
-import Data.Functor.Identity
-import Data.List.NonEmpty
-import Data.Maybe
+import Data.List.NonEmpty (NonEmpty ((:|)), fromList)
+import Data.Maybe (fromMaybe)
 import SyntaxTree
-import Text.Parsec.Combinator
-import Text.Parsec.Error
-import Text.Parsec.Pos
+  ( ActualParameterList,
+    Call (..),
+    ClassDeclaration (..),
+    Command (..),
+    Condition (..),
+    ConstDeclaration (..),
+    Expression (..),
+    Factor (..),
+    FieldDeclaration (..),
+    FormalParameterDeclaration (..),
+    FormalParameterList,
+    MethodDeclaration (..),
+    ObjectDeclaration (..),
+    Operator (..),
+    ProcedureDeclaration (..),
+    ProcedureHeader (..),
+    Program (..),
+    Relation (..),
+    Sign (..),
+    SymbolReference (..),
+    Term (..),
+    VarDeclaration (..),
+  )
+import Text.Parsec.Combinator (eof, many1, optionMaybe)
+import Text.Parsec.Error (ParseError)
+import Text.Parsec.Pos (SourcePos)
 import Text.Parsec.Prim
-import Token
+  ( Parsec,
+    getInput,
+    many,
+    parse,
+    tokenPrim,
+    (<|>),
+  )
+import Token (Token (..), TokenPos)
 
 -- a parser generates some output by consuming a list of tokens + positions
 type Parser a = Parsec [TokenPos] () a

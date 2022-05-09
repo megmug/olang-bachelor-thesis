@@ -1,15 +1,11 @@
 module ParserSpec where
 
-{- ORMOLU_DISABLE -}
-{- Internal imports -}
-import Parser
-import Tokenizer
-import SyntaxTree
-{- External imports -}
 import Data.Either
 import Data.Maybe
+import Parser
+import SyntaxTree
 import Test.Hspec
-{- ORMOLU_ENABLE -}
+import Tokenizer
 
 unsafeTokenize = fromRight [] . tokenize
 
@@ -198,7 +194,7 @@ spec = do
       it "can parse field reference" $
         do
           parse (unsafeTokenize "test.field") :: ParseResult Call
-          `shouldBe` (Right $ SymbolReference $ FieldReference "test" "field")
+          `shouldBe` Right (SymbolReference $ FieldReference "test" "field")
 
       it "can parse function call" $
         do

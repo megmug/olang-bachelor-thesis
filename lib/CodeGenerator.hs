@@ -1,19 +1,80 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeSynonymInstances #-}
+{-# HLINT ignore "Avoid lambda" #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 module CodeGenerator where
 
 import Command
-import Control.Lens
+  ( BinaryOperator
+      ( Divide,
+        Equals,
+        Greater,
+        Minus,
+        Plus,
+        Smaller,
+        Times
+      ),
+    ClassID,
+    CodeAddress,
+    Command
+      ( AllocateHeap,
+        CallMethod,
+        CallProcedure,
+        CombineBinary,
+        CombineUnary,
+        CreateMethodTable,
+        Halt,
+        Jump,
+        JumpIfFalse,
+        LoadHeap,
+        LoadStack,
+        PrintInt,
+        PrintStr,
+        PrintStrLn,
+        PushInt,
+        Read,
+        Reset,
+        Return,
+        StoreHeap,
+        StoreStack
+      ),
+    MethodID,
+    UnaryOperator (Not),
+  )
+import Control.Lens (use, view, (%=), (+=), (.=))
 import Control.Monad (when)
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Except
-import Control.Monad.Trans.Reader
-import Control.Monad.Trans.State
+import Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
+import Control.Monad.Trans.Reader (Reader, runReader)
+import Control.Monad.Trans.State (State, evalState)
 import Data.Foldable (traverse_)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import SyntaxTree
+  ( Call (..),
+    ClassDeclaration (..),
+    ClassName,
+    Command (..),
+    Condition (..),
+    ConstDeclaration (Const),
+    Expression (..),
+    Factor (..),
+    FieldDeclaration (..),
+    FormalParameterDeclaration (..),
+    FormalParameterList,
+    MethodDeclaration (..),
+    ObjectDeclaration (Object),
+    Operator (Divide, Times),
+    ProcedureDeclaration (..),
+    ProcedureHeader (ProcedureHeader),
+    Program (..),
+    Relation (Equals, Greater, Smaller),
+    Sign (Minus, Plus),
+    SymbolReference (FieldReference, NameReference),
+    Term (..),
+    VarDeclaration (Var),
+  )
 
 {- Basic helper type definitions -}
 -- A symbol has a name, can be const and has a type as well as a position in the local variable segment on the stack

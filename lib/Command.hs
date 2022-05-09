@@ -153,7 +153,7 @@ data Command
     -}
     PrintInt
   | {- PrintStr s: Print s to output -}
-    PrintStr String 
+    PrintStr String
   | {- PrintStrLn s: Print s to output with a newline at the end -}
     PrintStrLn String
   | -- Halt s: Halt the machine, writing message to output

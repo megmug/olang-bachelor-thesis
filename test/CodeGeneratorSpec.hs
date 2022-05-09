@@ -1,8 +1,6 @@
 module CodeGeneratorSpec where
 
 import CodeGenerator
-{- External imports -}
-
 import Command
 import Data.Either
 import Data.Maybe

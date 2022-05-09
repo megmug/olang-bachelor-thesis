@@ -3,7 +3,7 @@
 {-# HLINT ignore "Use newtype instead of data" #-}
 module SyntaxTree where
 
-import Data.List.NonEmpty
+import Data.List.NonEmpty ( NonEmpty )
 
 {- There is a type for all important nonterminals in the grammar
  - The grammar is not represented 1:1, rather an optimized version that is stripped of unnecessary details

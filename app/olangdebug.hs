@@ -1,10 +1,10 @@
+import CodeGenerator
+import Machine
 import Parser
 import SyntaxTree
 import System.Environment
 import System.IO
 import Tokenizer
-import CodeGenerator
-import Machine
 
 main :: IO ()
 main = do

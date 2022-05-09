@@ -4,11 +4,19 @@
 module Machine where
 
 import Command
-import Control.Lens
+  ( BinaryOperator (..),
+    ClassID,
+    CodeAddress,
+    Command (..),
+    MethodID,
+    StackAddress,
+    UnaryOperator (..),
+  )
+import Control.Lens (set, use, view, (+=), (.=))
 import Control.Monad (unless, when)
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Except
-import Control.Monad.Trans.State
+import Control.Monad.Trans.Except (Except, runExcept, throwE)
+import Control.Monad.Trans.State (StateT (runStateT), get)
 import qualified Data.IntMap as M
 import qualified Data.Vector as V
 

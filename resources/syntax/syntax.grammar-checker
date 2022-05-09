@@ -8,7 +8,6 @@
  * - | for every alternative, . at the end of every production
  */
 
-
 Program                     -> Program' do Command .
 Program'                    -> using opensquarebracket
                                ClassDeclaration* ProcedureDeclaration*

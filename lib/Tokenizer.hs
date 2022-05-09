@@ -5,8 +5,24 @@
 module Tokenizer (tokenize) where
 
 import Text.Parsec
-import Text.Parsec.Prim
-import Token
+  ( ParseError,
+    Parsec,
+    char,
+    choice,
+    digit,
+    endOfLine,
+    eof,
+    getPosition,
+    many,
+    many1,
+    parse,
+    satisfy,
+    space,
+    string,
+    tab,
+    try,
+  )
+import Token (Token (..), TokenPos)
 
 -- we have tokenizers for single tokens
 type UnitTokenizer = Parsec String () TokenPos
