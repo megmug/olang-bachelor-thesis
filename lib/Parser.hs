@@ -35,8 +35,6 @@ program = parser
 
 instance Parseable Program where
   parser = do
-    accept PROGRAM
-    acceptName
     mcps <- using
     accept DO
     cmd <- command

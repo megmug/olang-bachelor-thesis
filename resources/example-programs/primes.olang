@@ -1,4 +1,3 @@
-PROGRAM primes
 USING [
     PROCEDURE isprime(VAR n) RETURNS VAR isprime {
         VAR m

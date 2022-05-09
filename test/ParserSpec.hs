@@ -334,35 +334,35 @@ spec = do
     describe "programs" $ do
       it "can parse program without class or procedure declarations" $
         do
-          parse (unsafeTokenize "PROGRAM hello DO {VAR x x := 1}") :: ParseResult Program
+          parse (unsafeTokenize "DO {VAR x x := 1}") :: ParseResult Program
           `shouldSatisfy` isRight
 
       it "can parse program without class or procedure declarations, but with USING block" $
         do
-          parse (unsafeTokenize "PROGRAM hello USING [ ] DO {VAR x x := 1}") :: ParseResult Program
+          parse (unsafeTokenize "USING [ ] DO {VAR x x := 1}") :: ParseResult Program
           `shouldSatisfy` isRight
 
       it "can parse program with one class and no procedure declarations" $
         do
-          parse (unsafeTokenize "PROGRAM hello USING [ CLASS Test() FIELDS VAR x INIT PRINTI 1 [ METHOD test() PRINTI 1 ] ] DO {VAR x x := 1}") :: ParseResult Program
+          parse (unsafeTokenize "USING [ CLASS Test() FIELDS VAR x INIT PRINTI 1 [ METHOD test() PRINTI 1 ] ] DO {VAR x x := 1}") :: ParseResult Program
           `shouldSatisfy` isRight
 
       it "can parse program with no class and one procedure declaration" $
         do
-          parse (unsafeTokenize "PROGRAM hello USING [ PROCEDURE add(VAR x, VAR y) RETURNS VAR sum { sum := a + b } ] DO {VAR x x := 1}") :: ParseResult Program
+          parse (unsafeTokenize "USING [ PROCEDURE add(VAR x, VAR y) RETURNS VAR sum { sum := a + b } ] DO {VAR x x := 1}") :: ParseResult Program
           `shouldSatisfy` isRight
 
       it "can parse program with one class and one procedure declaration" $
         do
-          parse (unsafeTokenize "PROGRAM hello USING [ CLASS Test() FIELDS VAR x INIT PRINTI 1 [ METHOD test() PRINTI 1 ] PROCEDURE add(VAR x, VAR y) RETURNS VAR sum { sum := a + b } ] DO {VAR x x := 1}") :: ParseResult Program
+          parse (unsafeTokenize "USING [ CLASS Test() FIELDS VAR x INIT PRINTI 1 [ METHOD test() PRINTI 1 ] PROCEDURE add(VAR x, VAR y) RETURNS VAR sum { sum := a + b } ] DO {VAR x x := 1}") :: ParseResult Program
           `shouldSatisfy` isRight
 
       it "can parse program with two classes and one procedure declaration" $
         do
-          parse (unsafeTokenize "PROGRAM hello USING [ CLASS Test() FIELDS VAR x INIT PRINTI 1 [ METHOD test() PRINTI 1 ]  CLASS Test() FIELDS VAR x INIT PRINTI 1 [ METHOD test() PRINTI 1 ]  PROCEDURE add(VAR x, VAR y) RETURNS VAR sum { sum := a + b } ] DO {VAR x x := 1}") :: ParseResult Program
+          parse (unsafeTokenize "USING [ CLASS Test() FIELDS VAR x INIT PRINTI 1 [ METHOD test() PRINTI 1 ]  CLASS Test() FIELDS VAR x INIT PRINTI 1 [ METHOD test() PRINTI 1 ]  PROCEDURE add(VAR x, VAR y) RETURNS VAR sum { sum := a + b } ] DO {VAR x x := 1}") :: ParseResult Program
           `shouldSatisfy` isRight
 
       it "can parse program with two classes and two procedure declarations" $
         do
-          parse (unsafeTokenize "PROGRAM hello USING [ CLASS Test() FIELDS VAR x INIT PRINTI 1 [ METHOD test() PRINTI 1 ]  CLASS Test() FIELDS VAR x INIT PRINTI 1 [ METHOD test() PRINTI 1 ]  PROCEDURE add(VAR x, VAR y) RETURNS VAR sum { sum := a + b }  PROCEDURE add(VAR x, VAR y) RETURNS VAR sum { sum := a + b } ] DO {VAR x x := 1}") :: ParseResult Program
+          parse (unsafeTokenize "USING [ CLASS Test() FIELDS VAR x INIT PRINTI 1 [ METHOD test() PRINTI 1 ]  CLASS Test() FIELDS VAR x INIT PRINTI 1 [ METHOD test() PRINTI 1 ]  PROCEDURE add(VAR x, VAR y) RETURNS VAR sum { sum := a + b }  PROCEDURE add(VAR x, VAR y) RETURNS VAR sum { sum := a + b } ] DO {VAR x x := 1}") :: ParseResult Program
           `shouldSatisfy` isRight

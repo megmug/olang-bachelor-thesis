@@ -1,4 +1,3 @@
-PROGRAM bank
 USING [
     CLASS Account(VAR id)
     FIELDS VAR id

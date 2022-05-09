@@ -1,4 +1,3 @@
-PROGRAM rational
 USING [
     CLASS Rational (VAR numerator, VAR denominator) 
     FIELDS VAR numerator

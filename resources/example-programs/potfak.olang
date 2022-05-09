@@ -1,4 +1,3 @@
-PROGRAM potfak
 USING [
   PROCEDURE potenz(VAR a, VAR b) RETURNS VAR r {
     r := 1

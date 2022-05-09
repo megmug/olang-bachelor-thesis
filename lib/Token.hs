@@ -7,8 +7,7 @@ type TokenPos = (Token, SourcePos)
 
 -- these are the abstract tokens that can occur
 data Token
-  = PROGRAM
-  | USING
+  = USING
   | CLASS
   | SUBCLASSOF
   | FIELDS

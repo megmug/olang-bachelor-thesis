@@ -28,8 +28,7 @@ getUnitTokenizers ((s, t) : sts) = getUnitTokenizer s t : getUnitTokenizers sts
 unittokenizers :: [UnitTokenizer]
 unittokenizers =
   getUnitTokenizers
-    [ ("PROGRAM", PROGRAM),
-      ("USING", USING),
+    [ ("USING", USING),
       ("CLASS", CLASS),
       ("SUBCLASSOF", SUBCLASSOF),
       ("FIELDS", FIELDS),

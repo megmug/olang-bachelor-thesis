@@ -1,7 +1,6 @@
 /* Can be used as input for "https://bottlecaps.de/rr/ui" to generate syntax graphs */
 
-Program                    ::= 'PROGRAM' Name
-                               ('USING' '[' ClassDeclaration* ProcedureDeclaration* ']')?
+Program                    ::= ('USING' '[' ClassDeclaration* ProcedureDeclaration* ']')?
                                'DO' Command
 ClassDeclaration           ::= 'CLASS' ClassName FormalParameterList
                                ('SUBCLASSOF' ClassName)?

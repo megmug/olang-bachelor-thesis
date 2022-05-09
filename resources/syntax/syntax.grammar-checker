@@ -9,7 +9,7 @@
  */
 
 
-Program                     -> program name Program' do Command .
+Program                     -> Program' do Command .
 Program'                    -> using opensquarebracket
                                ClassDeclaration* ProcedureDeclaration*
                                closesquarebracket
