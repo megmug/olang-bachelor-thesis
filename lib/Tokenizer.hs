@@ -35,7 +35,6 @@ unittokenizers =
       ("FIELDS", FIELDS),
       ("INIT", INIT),
       ("OBJ", OBJ),
-      ("STATIC", STATIC),
       ("CONST", CONST),
       ("VAR", VAR),
       ("PROCEDURE", PROCEDURE),

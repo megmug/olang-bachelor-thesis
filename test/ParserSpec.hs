@@ -244,14 +244,9 @@ spec = do
           `shouldSatisfy` isRight
 
     describe "field declarations" $ do
-       it "can parse non-static field declaration" $
+      it "can parse non-static field declaration" $
         do
           parse (unsafeTokenize "VAR x") :: ParseResult FieldDeclaration
-          `shouldSatisfy` isRight
-
-       it "can parse static field declaration" $
-        do
-          parse (unsafeTokenize "STATIC VAR x") :: ParseResult FieldDeclaration
           `shouldSatisfy` isRight
 
     describe "actual parameter lists" $ do
@@ -320,7 +315,7 @@ spec = do
         do
           parse (unsafeTokenize "CLASS Test() SUBCLASSOF Test FIELDS VAR x VAR x INIT PRINTI 1 [ METHOD test() PRINTI 1 ]") :: ParseResult ClassDeclaration
           `shouldSatisfy` isRight
-      
+
       it "can parse class declaration with subclass, two fields and two methods" $
         do
           parse (unsafeTokenize "CLASS Test() SUBCLASSOF Test FIELDS VAR x VAR x INIT PRINTI 1 [ METHOD test() PRINTI 1  METHOD test() PRINTI 1 ]") :: ParseResult ClassDeclaration
@@ -346,7 +341,7 @@ spec = do
         do
           parse (unsafeTokenize "PROGRAM hello USING [ ] DO {VAR x x := 1}") :: ParseResult Program
           `shouldSatisfy` isRight
-      
+
       it "can parse program with one class and no procedure declarations" $
         do
           parse (unsafeTokenize "PROGRAM hello USING [ CLASS Test() FIELDS VAR x INIT PRINTI 1 [ METHOD test() PRINTI 1 ] ] DO {VAR x x := 1}") :: ParseResult Program

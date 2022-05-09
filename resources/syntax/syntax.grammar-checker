@@ -42,9 +42,7 @@ ActualParameterList'        -> Expression ActualParameterList''
                              | .
 ActualParameterList''       -> comma Expression ActualParameterList''
                              | .
-FieldDeclaration            -> FieldDeclaration' FormalParameterDeclaration .
-FieldDeclaration'           -> static
-                             | .
+FieldDeclaration            -> FormalParameterDeclaration .
 FieldDeclaration*           -> FieldDeclaration FieldDeclaration*
                              | .
 MethodDeclaration           -> method ProcedureHeader Command .

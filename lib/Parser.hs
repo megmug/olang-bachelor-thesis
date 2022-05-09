@@ -119,10 +119,7 @@ fielddeclaration :: Parser FieldDeclaration
 fielddeclaration = parser
 
 instance Parseable FieldDeclaration where
-  parser =
-    Field
-      <$> ((\m -> case m of Just _ -> True; Nothing -> False) <$> optionMaybe (accept STATIC))
-      <*> formalparameterdeclaration
+  parser = Field <$> formalparameterdeclaration
 
 methoddeclaration :: Parser MethodDeclaration
 methoddeclaration = parser

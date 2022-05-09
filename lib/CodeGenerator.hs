@@ -376,8 +376,7 @@ instance Generatable ClassDeclaration where
     return $ initCommands ++ concat methodCommands
     where
       addFieldToClassEntry :: ClassID -> FieldDeclaration -> GeneratorAction ()
-      addFieldToClassEntry id (Field True _) = throwE "static fields unsupported"
-      addFieldToClassEntry id (Field False pd) = do
+      addFieldToClassEntry id (Field pd) = do
         ct <- use classtable
         case lookup id ct of
           Nothing -> throwE "BUG encountered: trying to add field to non-existing class!"

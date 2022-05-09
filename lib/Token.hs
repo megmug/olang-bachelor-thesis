@@ -14,7 +14,6 @@ data Token
   | FIELDS
   | INIT
   | OBJ
-  | STATIC
   | CONST
   | VAR
   | PROCEDURE

@@ -1,11 +1,11 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
 {-# HLINT ignore "Use newtype instead of data" #-}
 module SyntaxTree where
 
 import Data.List.NonEmpty
 
-
-{- There is a type for all important nonterminals in the grammar 
+{- There is a type for all important nonterminals in the grammar
  - The grammar is not represented 1:1, rather an optimized version that is stripped of unnecessary details
  - This makes it easier to compile the language
  -}
@@ -14,8 +14,6 @@ type ClassName = String
 type Name = String
 
 type Number = Integer
-
-type IsStatic = Bool
 
 type Initializer = Command
 
@@ -53,7 +51,7 @@ data FormalParameterDeclaration
   | ObjectParameter ObjectDeclaration
   deriving (Eq, Show)
 
-data FieldDeclaration = Field IsStatic FormalParameterDeclaration deriving (Eq, Show)
+data FieldDeclaration = Field FormalParameterDeclaration deriving (Eq, Show)
 
 data MethodDeclaration = Method ProcedureHeader Command deriving (Eq, Show)
 
