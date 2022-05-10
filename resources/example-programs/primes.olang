@@ -1,6 +1,6 @@
 USING [
-    PROCEDURE isprime(VAR n) RETURNS VAR isprime {
-        VAR m
+    PROCEDURE isprime(INT n) RETURNS INT isprime {
+        INT m
         m := 2
         isprime := 1
         WHILE m < n DO {
@@ -11,7 +11,7 @@ USING [
 ]
 DO {
     PRINTLNS "I will now begin listing all the primes"
-    VAR n
+    INT n
     n := 2
     WHILE n > 0 DO {
         IF isprime(n) = 1 THEN {

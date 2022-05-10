@@ -3,7 +3,7 @@
 {-# HLINT ignore "Use newtype instead of data" #-}
 module SyntaxTree where
 
-import Data.List.NonEmpty ( NonEmpty )
+import Data.List.NonEmpty (NonEmpty)
 
 {- There is a type for all important nonterminals in the grammar
  - The grammar is not represented 1:1, rather an optimized version that is stripped of unnecessary details
@@ -17,11 +17,9 @@ type Number = Integer
 
 type Initializer = Command
 
-type ReturnParameterDeclaration = FormalParameterDeclaration
-
 type ActualParameterList = [Expression]
 
-type FormalParameterList = [FormalParameterDeclaration]
+type FormalParameterList = [SymbolDeclaration]
 
 data Program
   = Program
@@ -35,23 +33,19 @@ data ClassDeclaration
       ClassName
       FormalParameterList
       (Maybe ClassName)
-      [FieldDeclaration]
+      [SymbolDeclaration]
       Initializer
       [MethodDeclaration]
   deriving (Eq, Show)
 
-data ConstDeclaration = Const SymbolName Number deriving (Eq, Show)
+data IntSymbolDeclaration = Int SymbolName deriving (Eq, Show)
 
-data VarDeclaration = Var SymbolName deriving (Eq, Show)
+data ObjectSymbolDeclaration = Object ClassName SymbolName deriving (Eq, Show)
 
-data ObjectDeclaration = Object ClassName SymbolName deriving (Eq, Show)
-
-data FormalParameterDeclaration
-  = VarParameter VarDeclaration
-  | ObjectParameter ObjectDeclaration
+data SymbolDeclaration
+  = IntDeclaration IntSymbolDeclaration
+  | ObjectDeclaration ObjectSymbolDeclaration
   deriving (Eq, Show)
-
-data FieldDeclaration = Field FormalParameterDeclaration deriving (Eq, Show)
 
 data MethodDeclaration = Method ProcedureHeader Command deriving (Eq, Show)
 
@@ -61,7 +55,7 @@ data ProcedureHeader
   = ProcedureHeader
       SymbolName
       FormalParameterList
-      (Maybe ReturnParameterDeclaration)
+      (Maybe SymbolDeclaration)
       [ProcedureDeclaration]
   deriving (Eq, Show)
 
@@ -77,9 +71,7 @@ data SymbolReference
 
 data Command
   = Assignment SymbolReference Expression
-  | ConstDeclarationCommand ConstDeclaration
-  | VarDeclarationCommand VarDeclaration
-  | ObjectDeclarationCommand ObjectDeclaration
+  | SymbolDeclarationCommand SymbolDeclaration
   | CallCommand Call
   | Read SymbolName
   | Block (NonEmpty Command)

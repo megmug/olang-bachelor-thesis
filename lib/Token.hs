@@ -12,9 +12,8 @@ data Token
   | SUBCLASSOF
   | FIELDS
   | INIT
+  | INT
   | OBJ
-  | CONST
-  | VAR
   | PROCEDURE
   | METHOD
   | RETURNS

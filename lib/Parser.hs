@@ -15,23 +15,21 @@ import SyntaxTree
     ClassDeclaration (..),
     Command (..),
     Condition (..),
-    ConstDeclaration (..),
     Expression (..),
     Factor (..),
-    FieldDeclaration (..),
-    FormalParameterDeclaration (..),
     FormalParameterList,
+    IntSymbolDeclaration (Int),
     MethodDeclaration (..),
-    ObjectDeclaration (..),
+    ObjectSymbolDeclaration (Object),
     Operator (..),
     ProcedureDeclaration (..),
     ProcedureHeader (..),
     Program (..),
     Relation (..),
     Sign (..),
+    SymbolDeclaration (IntDeclaration, ObjectDeclaration),
     SymbolReference (..),
     Term (..),
-    VarDeclaration (..),
   )
 import Text.Parsec.Combinator (eof, many1, optionMaybe)
 import Text.Parsec.Error (ParseError)
@@ -90,48 +88,42 @@ instance Parseable ClassDeclaration where
       <$> (accept CLASS *> acceptClassName)
         <*> formalparameterlist
         <*> optionMaybe (accept SUBCLASSOF *> acceptClassName)
-        <*> (fromMaybe [] <$> optionMaybe (accept FIELDS *> many1 fielddeclaration))
+        <*> (fromMaybe [] <$> optionMaybe (accept FIELDS *> many1 symboldeclaration))
         <*> (accept INIT *> command)
         <*> (fromMaybe [] <$> optionMaybe (accept OpenSquareBracket *> many1 methoddeclaration <* accept CloseSquareBracket))
 
-constdeclaration :: Parser ConstDeclaration
-constdeclaration = parser
+intsymboldeclaration :: Parser IntSymbolDeclaration
+intsymboldeclaration = parser
 
-instance Parseable ConstDeclaration where
-  parser = Const <$> (accept CONST *> acceptSymbolName) <*> (accept (:=) *> acceptNumber)
+instance Parseable IntSymbolDeclaration where
+  parser = Int <$> (accept INT *> acceptSymbolName)
 
-vardeclaration :: Parser VarDeclaration
-vardeclaration = parser
+objectsymboldeclaration :: Parser ObjectSymbolDeclaration
+objectsymboldeclaration = parser
 
-instance Parseable VarDeclaration where
-  parser = Var <$> (accept VAR *> acceptSymbolName)
-
-objectdeclaration :: Parser ObjectDeclaration
-objectdeclaration = parser
-
-instance Parseable ObjectDeclaration where
+instance Parseable ObjectSymbolDeclaration where
   parser = Object <$> (accept OBJ *> acceptClassName) <*> acceptSymbolName
 
-formalparameterdeclaration :: Parser FormalParameterDeclaration
-formalparameterdeclaration = parser
+symboldeclaration :: Parser SymbolDeclaration
+symboldeclaration = parser
 
-instance Parseable FormalParameterDeclaration where
+instance Parseable SymbolDeclaration where
   parser =
-    VarParameter <$> vardeclaration
-      <|> ObjectParameter <$> objectdeclaration
+    IntDeclaration <$> intsymboldeclaration
+      <|> ObjectDeclaration <$> objectsymboldeclaration
 
-formalparameterlist :: Parser [FormalParameterDeclaration]
+formalparameterlist :: Parser FormalParameterList
 formalparameterlist = parser
 
 instance Parseable FormalParameterList where
   parser =
     fromMaybe []
       <$> ( accept OpenRoundBracket
-              *> optionMaybe ((:) <$> formalparameterdeclaration <*> many (accept Comma *> formalparameterdeclaration))
+              *> optionMaybe ((:) <$> symboldeclaration <*> many (accept Comma *> symboldeclaration))
               <* accept CloseRoundBracket
           )
 
-actualparameterlist :: Parser [Expression]
+actualparameterlist :: Parser ActualParameterList
 actualparameterlist = parser
 
 instance Parseable ActualParameterList where
@@ -141,12 +133,6 @@ instance Parseable ActualParameterList where
               *> optionMaybe ((:) <$> expression <*> many (accept Comma *> expression))
               <* accept CloseRoundBracket
           )
-
-fielddeclaration :: Parser FieldDeclaration
-fielddeclaration = parser
-
-instance Parseable FieldDeclaration where
-  parser = Field <$> formalparameterdeclaration
 
 methoddeclaration :: Parser MethodDeclaration
 methoddeclaration = parser
@@ -167,7 +153,7 @@ instance Parseable ProcedureHeader where
   parser =
     ProcedureHeader <$> acceptSymbolName
       <*> formalparameterlist
-      <*> optionMaybe (accept RETURNS *> formalparameterdeclaration)
+      <*> optionMaybe (accept RETURNS *> symboldeclaration)
       <*> do
         ml <- optionMaybe $ accept USING *> accept OpenSquareBracket *> many1 proceduredeclaration <* accept CloseSquareBracket
         return $ fromMaybe [] ml
@@ -204,9 +190,7 @@ command = parser
 instance Parseable Command where
   parser =
     Assignment <$> symbolreference <* accept (::=) <*> expression
-      <|> ConstDeclarationCommand <$> constdeclaration
-      <|> VarDeclarationCommand <$> vardeclaration
-      <|> ObjectDeclarationCommand <$> objectdeclaration
+      <|> SymbolDeclarationCommand <$> symboldeclaration
       <|> CallCommand <$> (accept CALL *> call)
       <|> Read <$> (accept READ *> acceptSymbolName)
       <|> Block <$> (fromList <$> (accept OpenCurlyBracket *> many1 command <* accept CloseCurlyBracket))

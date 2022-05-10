@@ -1,5 +1,5 @@
 USING [
- PROCEDURE ack(VAR n, VAR m) RETURNS VAR a {
+ PROCEDURE ack(INT n, INT m) RETURNS INT a {
    IF n < 0 THEN a := -1
    IF m < 0 THEN a := -1
    IF NOT n < 0 THEN
@@ -13,8 +13,8 @@ USING [
  }
 ]
 DO {
-  VAR n
-  VAR m
+  INT n
+  INT m
   READ n
   READ m
   PRINTI ack(n, m) }

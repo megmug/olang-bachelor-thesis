@@ -57,30 +57,26 @@ import SyntaxTree
     ClassName,
     Command (..),
     Condition (..),
-    ConstDeclaration (Const),
     Expression (..),
     Factor (..),
-    FieldDeclaration (..),
-    FormalParameterDeclaration (..),
     FormalParameterList,
+    IntSymbolDeclaration (Int),
     MethodDeclaration (..),
-    ObjectDeclaration (Object),
+    ObjectSymbolDeclaration (Object),
     Operator (Divide, Times),
     ProcedureDeclaration (..),
     ProcedureHeader (ProcedureHeader),
     Program (..),
     Relation (Equals, Greater, Smaller),
     Sign (Minus, Plus),
+    SymbolDeclaration (IntDeclaration, ObjectDeclaration),
     SymbolReference (FieldReference, NameReference),
     Term (..),
-    VarDeclaration (Var),
   )
 
 {- Basic helper type definitions -}
 -- A symbol has a name, can be const and has a type as well as a position in the local variable segment on the stack
-data SymbolEntry = SymbolEntry String IsConst Type Position deriving (Eq, Show)
-
-type IsConst = Bool
+data SymbolEntry = SymbolEntry String Type Position deriving (Eq, Show)
 
 -- A type can be either a normal primitive integer or an object with a type
 data Type = INT | OBJ String deriving (Eq, Show)
@@ -257,34 +253,24 @@ isSubclassOf ct s t =
       Nothing -> False
       Just (ClassEntry s' _ _ _) -> isSubclassOf ct s' t
 
-paramToType :: FormalParameterDeclaration -> Type
-paramToType (VarParameter _) = INT
-paramToType (ObjectParameter (Object t _)) = OBJ t
+symbolDeclToType :: SymbolDeclaration -> Type
+symbolDeclToType (IntDeclaration _) = INT
+symbolDeclToType (ObjectDeclaration (Object t _)) = OBJ t
 
-addParamsToSymbols :: SymTable -> FormalParameterList -> Maybe SymTable
-addParamsToSymbols st [] = Just st
-addParamsToSymbols st (p : ps) = do
-  st' <- addParamToSymbols st p
-  addParamsToSymbols st' ps
+addParamsToSymbols :: SymTable -> FormalParameterList -> SymTable
+addParamsToSymbols st [] = st
+addParamsToSymbols st (p : ps) = addParamsToSymbols (addParamToSymbols st p) ps
   where
-    addParamToSymbols :: SymTable -> FormalParameterDeclaration -> Maybe SymTable
-    addParamToSymbols st (VarParameter (Var n)) = addSymbol st n False INT
-    addParamToSymbols st (ObjectParameter (Object t n)) = addSymbol st n False (OBJ t)
+    addParamToSymbols :: SymTable -> SymbolDeclaration -> SymTable
+    addParamToSymbols st (IntDeclaration (Int n)) = addSymbol st n INT
+    addParamToSymbols st (ObjectDeclaration (Object t n)) = addSymbol st n (OBJ t)
 
-addSymbol :: SymTable -> String -> IsConst -> Type -> Maybe SymTable
-addSymbol st name isconst t =
-  if shadowsConst st name
-    then Nothing
-    else Just $ SymbolEntry name isconst t (length st) : st
-  where
-    shadowsConst st name = case lookupSymbol st name of
-      Nothing -> False
-      Just (SymbolEntry _ False _ _) -> False
-      Just (SymbolEntry _ True _ _) -> True
+addSymbol :: SymTable -> String -> Type -> SymTable
+addSymbol st name t = SymbolEntry name t (length st) : st
 
 lookupSymbol :: SymTable -> String -> Maybe SymbolEntry
 lookupSymbol st n =
-  let hits = [s | s@(SymbolEntry n' _ t _) <- st, n == n']
+  let hits = [s | s@(SymbolEntry n' t _) <- st, n == n']
    in if hits /= [] then Just $ head hits else Nothing
 
 lookupFieldByName :: FieldTable -> String -> Maybe FieldEntry
@@ -311,8 +297,8 @@ lookupClosestMatchingMethod ct st o m ts = do
   -- First, calculate the methods whose name and types are compatible
   case lookupSymbol st o of
     Nothing -> Left $ "undefined symbol " ++ o
-    Just (SymbolEntry _ _ INT _) -> Left $ "method call on VAR symbol " ++ o
-    Just (SymbolEntry _ _ (OBJ cn) _) -> case lookupClassByName cn ct of
+    Just (SymbolEntry _ INT _) -> Left $ "method call on INT symbol " ++ o
+    Just (SymbolEntry _ (OBJ cn) _) -> case lookupClassByName cn ct of
       Nothing -> Left $ "BUG encountered: undefined class for symbol " ++ o
       Just (_, ClassEntry cn _ _ mt) -> do
         let matchingMethods = filter (matchesNameAndType ct m ts) mt
@@ -343,18 +329,18 @@ getTypeLowerBoundProc ct (lp : lps) ps =
 getInputTypes :: ProcEntry -> [Type]
 getInputTypes (ProcEntry (Signature _ ts _) _) = ts
 
-getParamName :: FormalParameterDeclaration -> String
-getParamName (VarParameter (Var n)) = n
-getParamName (ObjectParameter (Object _ n)) = n
+getSymbolDeclName :: SymbolDeclaration -> String
+getSymbolDeclName (IntDeclaration (Int n)) = n
+getSymbolDeclName (ObjectDeclaration (Object _ n)) = n
 
 hasNameCollisions :: FormalParameterList -> Bool
 hasNameCollisions [] = False
 hasNameCollisions (p : fpl) = any (hasSameName p) fpl || hasNameCollisions fpl
   where
-    hasSameName :: FormalParameterDeclaration -> FormalParameterDeclaration -> Bool
-    hasSameName (VarParameter (Var n)) (VarParameter (Var n')) = n == n'
-    hasSameName (ObjectParameter (Object _ n)) (ObjectParameter (Object _ n')) = n == n'
-    hasSameName (VarParameter (Var n)) (ObjectParameter (Object _ n')) = n == n'
+    hasSameName :: SymbolDeclaration -> SymbolDeclaration -> Bool
+    hasSameName (IntDeclaration (Int n)) (IntDeclaration (Int n')) = n == n'
+    hasSameName (ObjectDeclaration (Object _ n)) (ObjectDeclaration (Object _ n')) = n == n'
+    hasSameName (IntDeclaration (Int n)) (ObjectDeclaration (Object _ n')) = n == n'
     hasSameName p p' = hasSameName p' p
 
 isIntType :: OptionalType -> Bool
@@ -364,9 +350,7 @@ isIntType (Just (OBJ _)) = False
 
 -- This function calculates the required memory a procedure needs to allocate for local variables declared in its code
 calculateCommandStackMemoryRequirements :: SyntaxTree.Command -> Int
-calculateCommandStackMemoryRequirements (ConstDeclarationCommand _) = 1
-calculateCommandStackMemoryRequirements (VarDeclarationCommand _) = 1
-calculateCommandStackMemoryRequirements (ObjectDeclarationCommand _) = 1
+calculateCommandStackMemoryRequirements (SymbolDeclarationCommand _) = 1
 calculateCommandStackMemoryRequirements (Block (c :| [])) = calculateCommandStackMemoryRequirements c
 {- If a block has at least 2 commands, the memory required is determined by the question if the first command is a block, too.
  - This is because of how blocks are compiled:
@@ -430,20 +414,20 @@ instance Generatable ClassDeclaration where
     classtable .= (newClassID, template) : ct
     traverse_ (addFieldToClassEntry newClassID) fields
     {- Generate initializer as procedure with object 'this' as implicit return parameter and preceding memory allocation -}
-    let initProcedure = Procedure (ProcedureHeader ("INIT_" ++ n) ps (Just $ ObjectParameter $ Object n "this") []) init
+    let initProcedure = Procedure (ProcedureHeader ("INIT_" ++ n) ps (Just $ ObjectDeclaration $ Object n "this") []) init
     initCommands <- contextGenerator INIT initProcedure
     {- Generate methods -}
     methodCommands <- traverse (contextGenerator newClassID) methods
     return $ initCommands ++ concat methodCommands
     where
-      addFieldToClassEntry :: ClassID -> FieldDeclaration -> GeneratorAction ()
-      addFieldToClassEntry id (Field pd) = do
+      addFieldToClassEntry :: ClassID -> SymbolDeclaration -> GeneratorAction ()
+      addFieldToClassEntry id sd = do
         ct <- use classtable
         case lookup id ct of
           Nothing -> throwE "BUG encountered: trying to add field to non-existing class!"
-          Just (ClassEntry cn ucc ft mt) -> case pd of
-            VarParameter (Var n) -> classtable %= replaceClassInTable id (ClassEntry cn ucc (FieldEntry n INT (length ft) : ft) mt)
-            ObjectParameter (Object t n) -> case lookupClassByName t ct of
+          Just (ClassEntry cn ucc ft mt) -> case sd of
+            IntDeclaration (Int n) -> classtable %= replaceClassInTable id (ClassEntry cn ucc (FieldEntry n INT (length ft) : ft) mt)
+            ObjectDeclaration (Object t n) -> case lookupClassByName t ct of
               Nothing -> throwE $ "field " ++ n ++ " of class " ++ cn ++ " has invalid type " ++ t ++ "!"
               Just _ -> classtable %= replaceClassInTable id (ClassEntry cn ucc (FieldEntry n (OBJ t) (length ft) : ft) mt)
 
@@ -455,7 +439,7 @@ instance ContextGeneratable ClassID MethodDeclaration where
     -- There will be one jump command before the actual method code starts
     prefixlength += 1
     methodCodeStart <- use prefixlength
-    let newMethodEntry = ProcEntry (Signature n (map paramToType pl) (paramToType <$> mrp)) methodCodeStart
+    let newMethodEntry = ProcEntry (Signature n (map symbolDeclToType pl) (symbolDeclToType <$> mrp)) methodCodeStart
     updateClassTableWithNewMethod id newMethodEntry
     {- Generate sub-procedures -}
     -- Save the old procedure table for the reset later
@@ -466,15 +450,13 @@ instance ContextGeneratable ClassID MethodDeclaration where
     ct <- use classtable
     thisParam <- case lookup id ct of
       Nothing -> throwE "BUG encountered: method has no corresponding class!"
-      Just (ClassEntry n _ _ _) -> return $ ObjectParameter $ Object n "this"
+      Just (ClassEntry n _ _ _) -> return $ ObjectDeclaration $ Object n "this"
     let params =
           thisParam : case mrp of
             Nothing -> pl
             Just rp -> if rp `elem` pl then pl else pl ++ [rp]
     st <- use symtable
-    case addParamsToSymbols st params of
-      Nothing -> throwE $ "One of " ++ n ++ "'s parameters shadows a const value"
-      Just st' -> symtable .= st'
+    symtable .= addParamsToSymbols st params
     stWithParams <- use symtable
     {- Generate method commands, including stack memory allocation -}
     stackMemoryAllocationCommands <- do
@@ -491,9 +473,9 @@ instance ContextGeneratable ClassID MethodDeclaration where
     {- Create necessary commands for return -}
     returnCommands <- case mrp of
       Nothing -> return [Return False]
-      Just rp -> case lookupSymbol stWithParams (getParamName rp) of
+      Just rp -> case lookupSymbol stWithParams (getSymbolDeclName rp) of
         Nothing -> throwE "BUG encountered: return parameter missing from symbols!"
-        Just (SymbolEntry _ _ _ p) -> return [LoadStack p, Return True]
+        Just (SymbolEntry _ _ p) -> return [LoadStack p, Return True]
     -- Update prefix
     prefixlength += length returnCommands
     {- Cleanup state -}
@@ -540,7 +522,7 @@ instance ContextGeneratable ProcKind ProcedureDeclaration where
     pt <- use proctable
     oldPrefix <- use prefixlength
     -- Address of new procedure must be the old prefix + 1, because of the jump command at the beginning that must be skipped
-    let newProcEntry = ProcEntry (Signature n (map paramToType pl) (paramToType <$> mrp)) (oldPrefix + 1)
+    let newProcEntry = ProcEntry (Signature n (map symbolDeclToType pl) (symbolDeclToType <$> mrp)) (oldPrefix + 1)
     -- Update state with new procedure entry
     proctable .= newProcEntry : pt
     {- Generate sub-procedures -}
@@ -553,9 +535,7 @@ instance ContextGeneratable ProcKind ProcedureDeclaration where
           Nothing -> pl
           Just rp -> if rp `elem` pl then pl else pl ++ [rp]
     st <- use symtable
-    case addParamsToSymbols st params of
-      Nothing -> throwE $ "One of " ++ n ++ "'s parameters shadows a const value"
-      Just st' -> symtable .= st'
+    symtable .= addParamsToSymbols st params
     stWithParams <- use symtable
     {- Generate procedure code, including stack memory allocation and, in case of initializers, heap memory allocation-}
     stackMemoryAllocationCommands <- do
@@ -574,9 +554,9 @@ instance ContextGeneratable ProcKind ProcedureDeclaration where
         prefixlength += 2
         case mrp of
           Nothing -> throwE "BUG encountered: initializer without return value!"
-          Just rp -> case lookupSymbol stWithParams (getParamName rp) of
+          Just rp -> case lookupSymbol stWithParams (getSymbolDeclName rp) of
             Nothing -> throwE "BUG encountered: return parameter missing from symbols!"
-            Just (SymbolEntry _ _ t p) -> case t of
+            Just (SymbolEntry _ t p) -> case t of
               INT -> throwE "BUG encountered: initializer with VAR return value!"
               OBJ s -> do
                 ct <- use classtable
@@ -589,9 +569,9 @@ instance ContextGeneratable ProcKind ProcedureDeclaration where
     {- Create necesary commands for return -}
     returnCommands <- case mrp of
       Nothing -> return [Return False]
-      Just rp -> case lookupSymbol stWithParams (getParamName rp) of
+      Just rp -> case lookupSymbol stWithParams (getSymbolDeclName rp) of
         Nothing -> throwE "BUG encountered: return parameter missing from symbols!"
-        Just (SymbolEntry _ _ _ p) -> return [LoadStack p, Return True]
+        Just (SymbolEntry _ _ p) -> return [LoadStack p, Return True]
     -- Update prefix
     prefixlength += length returnCommands
     {- Cleanup state -}
@@ -609,7 +589,7 @@ instance Generatable Call where
     st <- use symtable
     pos <- case lookupSymbol st n of
       Nothing -> throwE $ "undefined symbol " ++ n
-      Just (SymbolEntry _ _ _ p) -> return p
+      Just (SymbolEntry _ _ p) -> return p
     -- the resulting command is just a load on the symbol's position
     prefixlength += 1
     return [LoadStack pos]
@@ -618,8 +598,8 @@ instance Generatable Call where
     st <- use symtable
     (objType, objPos) <- case lookupSymbol st o of
       Nothing -> throwE $ "undefined symbol " ++ o
-      Just (SymbolEntry _ _ INT _) -> throwE "trying to access field of a non-object"
-      Just (SymbolEntry _ _ (OBJ t) p) -> return (t, p)
+      Just (SymbolEntry _ INT _) -> throwE "trying to access field of a non-object"
+      Just (SymbolEntry _ (OBJ t) p) -> return (t, p)
     ct <- use classtable
     -- lookup field
     fieldPos <- case lookupClassByName objType ct of
@@ -659,7 +639,7 @@ instance Generatable Call where
     -- first, lookup the object position
     objPos <- case lookupSymbol st o of
       Nothing -> throwE $ "call on invalid object symbol " ++ o
-      Just (SymbolEntry _ _ _ p) -> return p
+      Just (SymbolEntry _ _ p) -> return p
     let objectLoadingCommand = [LoadStack objPos]
     prefixlength += 1
     -- then generate the commands for all the actual parameters
@@ -673,14 +653,14 @@ instance Typeable Call where
     case lookupSymbol st n of
       Nothing -> throwE $ "undefined variable in expression: " ++ n
       -- an symbol's type is just the type declared in the symbol table
-      Just (SymbolEntry _ _ t _) -> return $ Just t
+      Just (SymbolEntry _ t _) -> return $ Just t
   typifier (SymbolReference (FieldReference o f)) = do
     -- lookup object
     st <- view symtablet
     (objType, objPos) <- case lookupSymbol st o of
       Nothing -> throwE $ "undefined symbol " ++ o
-      Just (SymbolEntry _ _ INT _) -> throwE "trying to access field of a non-object"
-      Just (SymbolEntry _ _ (OBJ t) p) -> return (t, p)
+      Just (SymbolEntry _ INT _) -> throwE "trying to access field of a non-object"
+      Just (SymbolEntry _ (OBJ t) p) -> return (t, p)
     ct <- view classtablet
     -- lookup field
     case lookupClassByName objType ct of
@@ -717,7 +697,7 @@ instance ContextGeneratable CommandContext SyntaxTree.Command where
     st <- use symtable
     (symType, symPos) <- case lookupSymbol st n of
       Nothing -> throwE $ "assignment to undefined variable " ++ n
-      Just (SymbolEntry _ _ t p) -> return (t, p)
+      Just (SymbolEntry _ t p) -> return (t, p)
     mt <- typify e
     case mt of
       Nothing -> throwE $ "variable " ++ n ++ " was assigned an expression with empty type"
@@ -735,8 +715,8 @@ instance ContextGeneratable CommandContext SyntaxTree.Command where
     st <- use symtable
     (objType, objPos) <- case lookupSymbol st o of
       Nothing -> throwE $ "undefined symbol " ++ o
-      Just (SymbolEntry _ _ INT _) -> throwE "trying to access field of a non-object"
-      Just (SymbolEntry _ _ (OBJ t) p) -> return (t, p)
+      Just (SymbolEntry _ INT _) -> throwE "trying to access field of a non-object"
+      Just (SymbolEntry _ (OBJ t) p) -> return (t, p)
     ct <- use classtable
     -- lookup field
     (fieldType, fieldPos) <- case lookupClassByName objType ct of
@@ -759,39 +739,21 @@ instance ContextGeneratable CommandContext SyntaxTree.Command where
     let storeCommands = [StoreHeap fieldPos]
     prefixlength += 1
     return $ objAddrLoadCommand ++ expressionCommands ++ storeCommands
-  contextGenerator ctxt (ConstDeclarationCommand (SyntaxTree.Const name number)) = do
+  contextGenerator ctxt (SymbolDeclarationCommand (IntDeclaration (Int n))) = do
     -- Assemble new symbol entry and add it
     st <- use symtable
-    st' <- case addSymbol st name True INT of
-      Nothing -> throwE $ "const " ++ name ++ " shadows another const value"
-      Just st' -> return st'
-    symtable .= st'
-    -- look up position of new symbol
-    pos <- case lookupSymbol st' name of
-      Nothing -> throwE "BUG encountered: impossibly, the symbol we just added vanished"
-      Just (SymbolEntry _ _ _ p) -> return p
-    -- return commands and update prefix as well symbol table
-    prefixlength += 2
-    -- possible optimization: if the context isn't INNER, the commands can be omitted altogether
-    updateSymbolTableDependingOnCommandContext ctxt st
-    return [PushInt number, StoreStack pos]
-  contextGenerator ctxt (VarDeclarationCommand (Var n)) = do
-    -- Assemble new symbol entry and add it
-    st <- use symtable
-    st' <- case addSymbol st n False INT of
-      Nothing -> throwE $ "variable " ++ n ++ " shadows a const value"
-      Just st' -> return st'
-    symtable .= st'
+    symtable .= addSymbol st n INT
+    st' <- use symtable
     -- look up position of new symbol
     pos <- case lookupSymbol st' n of
       Nothing -> throwE "BUG encountered: impossibly, the symbol we just added vanished"
-      Just (SymbolEntry _ _ _ p) -> return p
+      Just (SymbolEntry _ _ p) -> return p
     -- return commands and update prefix as well symbol table
     prefixlength += 2
     -- possible optimization: if the context isn't INNER, the commands can be omitted altogether
     updateSymbolTableDependingOnCommandContext ctxt st
     return [PushInt 0, StoreStack pos]
-  contextGenerator ctxt (ObjectDeclarationCommand (Object t n)) = do
+  contextGenerator ctxt (SymbolDeclarationCommand (ObjectDeclaration (Object t n))) = do
     -- Check if class is valid
     ct <- use classtable
     case lookupClassByName t ct of
@@ -799,14 +761,12 @@ instance ContextGeneratable CommandContext SyntaxTree.Command where
       Just _ -> return ()
     -- Assemble new symbol entry and add it
     st <- use symtable
-    st' <- case addSymbol st n False (OBJ t) of
-      Nothing -> throwE "BUG encountered: impossibly, the symbol we just added vanished"
-      Just st' -> return st'
-    symtable .= st'
+    symtable .= addSymbol st n (OBJ t)
+    st' <- use symtable
     -- look up position of new symbol
     pos <- case lookupSymbol st' n of
       Nothing -> throwE "BUG encountered: impossibly, the symbol we just added vanished"
-      Just (SymbolEntry _ _ _ p) -> return p
+      Just (SymbolEntry _ _ p) -> return p
     -- return commands and update prefix as well as symbol table
     prefixlength += 2
     -- possible optimization: of the context isn't INNER, the commands can be omitted altogether
@@ -822,8 +782,8 @@ instance ContextGeneratable CommandContext SyntaxTree.Command where
     st <- use symtable
     pos <- case lookupSymbol st n of
       Nothing -> throwE $ "undefined symbol " ++ n
-      Just (SymbolEntry _ _ (OBJ _) _) -> throwE $ "type error: " ++ n ++ " is an object, can't read an integer into it"
-      Just (SymbolEntry _ _ INT p) -> return p
+      Just (SymbolEntry _ (OBJ _) _) -> throwE $ "type error: " ++ n ++ " is an object, can't read an integer into it"
+      Just (SymbolEntry _ INT p) -> return p
     prefixlength += 2
     return [Command.Read, StoreStack pos]
   contextGenerator _ (Block cs) = do

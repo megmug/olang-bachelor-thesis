@@ -1,5 +1,5 @@
 USING [
-  PROCEDURE potenz(VAR a, VAR b) RETURNS VAR r {
+  PROCEDURE potenz(INT a, INT b) RETURNS INT r {
     r := 1
     WHILE b > 0 DO {
         r := r * a
@@ -7,15 +7,15 @@ USING [
     }
   }
 
-  PROCEDURE fakultaet(VAR n) RETURNS VAR x {
+  PROCEDURE fakultaet(INT n) RETURNS INT x {
     IF n > 1 THEN x := n * fakultaet(n - 1)
     IF n = 1 THEN x := 1
     IF n < 1 THEN x := -1
   }
 ]
 DO {
-    VAR a
-    VAR b
+    INT a
+    INT b
     PRINTS "Please enter a number 'a': "
     READ a
     PRINTS "Please enter an exponent 'b': "
@@ -23,7 +23,7 @@ DO {
     PRINTS "a ^ b = "
     PRINTI potenz(a, b)
     PRINTLNS ""
-    VAR n
+    INT n
     PRINTS "Please enter another number: "
     READ n
     PRINTS "The faculty of that number is: "

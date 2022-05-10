@@ -1,7 +1,7 @@
 USING [
-    CLASS Rational (VAR numerator, VAR denominator) 
-    FIELDS VAR numerator
-           VAR denominator
+    CLASS Rational (INT numerator, INT denominator) 
+    FIELDS INT numerator
+           INT denominator
     INIT {
         IF denominator = 0 THEN {
             PRINTLNS "denominator cannot be zero!"
@@ -15,18 +15,18 @@ USING [
             copy := Rational(this.numerator, this.denominator)
         }
 
-        METHOD getNumerator() RETURNS VAR num {
+        METHOD getNumerator() RETURNS INT num {
             num := this.numerator
         }
 
-        METHOD getDenominator() RETURNS VAR den {
+        METHOD getDenominator() RETURNS INT den {
             den := this.denominator
         }
 
         METHOD add(OBJ Rational summand) RETURNS OBJ Rational sum {
-            VAR newnum
+            INT newnum
             newnum := this.numerator * summand.getDenominator() + summand.getNumerator() * this.denominator
-            VAR newden
+            INT newden
             newden := this.denominator * summand.getDenominator()
             sum := Rational(newnum, newden)
         }
@@ -38,9 +38,9 @@ USING [
         }
 
         METHOD multiply(OBJ Rational factor) RETURNS OBJ Rational product {
-            VAR newnum
+            INT newnum
             newnum := this.numerator * factor.getNumerator()
-            VAR newden
+            INT newden
             newden := this.denominator * factor.getDenominator()
             product := Rational(newnum, newden)
         }
@@ -51,12 +51,12 @@ USING [
             quotient := this.multiply(reciprocal)
         }
 
-        METHOD isPositive() RETURNS VAR ispositive {
+        METHOD isPositive() RETURNS INT ispositive {
             ispositive := 1
             IF this.numerator / this.denominator < 0 THEN ispositive := 0
         }
 
-        METHOD isNatural() RETURNS VAR isnatural {
+        METHOD isNatural() RETURNS INT isnatural {
             isnatural := 0
             IF this.isPositive() = 1 THEN {
                 IF (this.numerator / this.denominator) * this.denominator = this.numerator THEN isnatural := 1
@@ -65,7 +65,7 @@ USING [
 
         METHOD simplify() RETURNS OBJ Rational simple
         USING [
-            PROCEDURE gcd(VAR a, VAR b) RETURNS VAR res {
+            PROCEDURE gcd(INT a, INT b) RETURNS INT res {
                 IF b = 0 THEN res := a
                 IF NOT b = 0 THEN {
                     IF a = 0 THEN res := b
@@ -77,12 +77,12 @@ USING [
             }
         ]
         {
-            VAR mygcd
+            INT mygcd
             mygcd := gcd(this.numerator, this.denominator)
             simple := Rational(this.numerator / mygcd, this.denominator / mygcd)
         }
 
-        METHOD compare(OBJ Rational other) RETURNS VAR order {
+        METHOD compare(OBJ Rational other) RETURNS INT order {
             order := this.numerator * other.getDenominator() - other.getNumerator() * this.denominator
         }
 
@@ -91,7 +91,7 @@ USING [
             zero := Rational(0, 1)
             OBJ Rational one
             one := Rational(1, 1)
-            VAR order
+            INT order
             order := this.compare(zero)
             IF order < 0 THEN {
                 PRINTS "input must not be below 0!"
@@ -113,7 +113,7 @@ USING [
 
                 sqrt := one
 
-                VAR steps
+                INT steps
                 steps := 0
 
                 WHILE steps < 100 DO {
@@ -138,7 +138,7 @@ USING [
         }
     ]
 
-    CLASS Integer(VAR numerator, VAR denominator) SUBCLASSOF Rational
+    CLASS Integer(INT numerator, INT denominator) SUBCLASSOF Rational
     INIT {
         IF denominator = 0 THEN {
             PRINTS "denominator cannot be zero"

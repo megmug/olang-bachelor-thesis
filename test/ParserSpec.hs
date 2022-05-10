@@ -4,8 +4,8 @@ import Data.Either
 import Parser
 import SyntaxTree
 import Test.Hspec
-import Tokenizer
 import Token
+import Tokenizer
 
 unsafeTokenize :: String -> [TokenPos]
 unsafeTokenize = fromRight [] . tokenize
@@ -121,14 +121,9 @@ spec = do
           parse (unsafeTokenize "test := 3") :: ParseResult Command
           `shouldSatisfy` isRight
 
-      it "can parse const declaration command" $
+      it "can parse int declaration command" $
         do
-          parse (unsafeTokenize "CONST test = 3") :: ParseResult Command
-          `shouldSatisfy` isRight
-
-      it "can parse var declaration command" $
-        do
-          parse (unsafeTokenize "VAR test") :: ParseResult Command
+          parse (unsafeTokenize "INT test") :: ParseResult Command
           `shouldSatisfy` isRight
 
       it "can parse object declaration command" $
@@ -210,40 +205,34 @@ spec = do
     describe "procedure headers" $ do
       it "can parse procedure header without return and without sub-procedures" $
         do
-          parse (unsafeTokenize "test(VAR x)") :: ParseResult ProcedureHeader
+          parse (unsafeTokenize "test(INT x)") :: ParseResult ProcedureHeader
           `shouldSatisfy` isRight
 
       it "can parse procedure header with return and without sub-procedures" $
         do
-          parse (unsafeTokenize "test(VAR test) RETURNS VAR test") :: ParseResult ProcedureHeader
+          parse (unsafeTokenize "test(INT test) RETURNS INT test") :: ParseResult ProcedureHeader
           `shouldSatisfy` isRight
 
       it "can parse procedure header with return and with one sub-procedure" $
         do
-          parse (unsafeTokenize "test(VAR x) RETURNS VAR test USING [ PROCEDURE test() PRINTI 1 ]") :: ParseResult ProcedureHeader
+          parse (unsafeTokenize "test(INT x) RETURNS INT test USING [ PROCEDURE test() PRINTI 1 ]") :: ParseResult ProcedureHeader
           `shouldSatisfy` isRight
 
       it "can parse procedure header with return and with two sub-procedures" $
         do
-          parse (unsafeTokenize "test(VAR x) RETURNS VAR test USING [ PROCEDURE test() PRINTI 1  PROCEDURE test() PRINTI 1 ]") :: ParseResult ProcedureHeader
+          parse (unsafeTokenize "test(INT x) RETURNS INT test USING [ PROCEDURE test() PRINTI 1  PROCEDURE test() PRINTI 1 ]") :: ParseResult ProcedureHeader
           `shouldSatisfy` isRight
 
     describe "procedure declarations" $ do
       it "can parse procedure declaration" $
         do
-          parse (unsafeTokenize "PROCEDURE add(VAR x, VAR y) RETURNS VAR sum { sum := a + b }") :: ParseResult ProcedureDeclaration
+          parse (unsafeTokenize "PROCEDURE add(INT x, INT y) RETURNS INT sum { sum := a + b }") :: ParseResult ProcedureDeclaration
           `shouldSatisfy` isRight
 
     describe "method declarations" $ do
       it "can parse procedure declaration" $
         do
-          parse (unsafeTokenize "METHOD add(VAR x, VAR y) RETURNS VAR sum { sum := a + b }") :: ParseResult MethodDeclaration
-          `shouldSatisfy` isRight
-
-    describe "field declarations" $ do
-      it "can parse non-static field declaration" $
-        do
-          parse (unsafeTokenize "VAR x") :: ParseResult FieldDeclaration
+          parse (unsafeTokenize "METHOD add(INT x, INT y) RETURNS INT sum { sum := a + b }") :: ParseResult MethodDeclaration
           `shouldSatisfy` isRight
 
     describe "actual parameter lists" $ do
@@ -254,38 +243,32 @@ spec = do
 
     describe "formal parameter lists" $ do
       it "can parse empty formal parameter list" $ do (parse (unsafeTokenize "()") :: ParseResult FormalParameterList) `shouldBe` Right []
-      it "can parse singleton formal parameter list" $ do (parse (unsafeTokenize "(VAR x)") :: ParseResult FormalParameterList) `shouldSatisfy` isRight
-      it "can not parse singleton formal parameter list without closing bracket" $ do (parse (unsafeTokenize "(VAR x") :: ParseResult FormalParameterList) `shouldSatisfy` isLeft
-      it "can parse long formal parameter list" $ do (parse (unsafeTokenize "(VAR x, VAR x)") :: ParseResult FormalParameterList) `shouldSatisfy` isRight
+      it "can parse singleton formal parameter list" $ do (parse (unsafeTokenize "(INT x)") :: ParseResult FormalParameterList) `shouldSatisfy` isRight
+      it "can not parse singleton formal parameter list without closing bracket" $ do (parse (unsafeTokenize "(INT x") :: ParseResult FormalParameterList) `shouldSatisfy` isLeft
+      it "can parse long formal parameter list" $ do (parse (unsafeTokenize "(INT x, INT x)") :: ParseResult FormalParameterList) `shouldSatisfy` isRight
 
-    describe "formal parameter declarations" $ do
-      it "can parse formal object parameter" $
+    describe "symbol declarations" $ do
+      it "can parse object symbol" $
         do
-          parse (unsafeTokenize "OBJ Test test") :: ParseResult FormalParameterDeclaration
+          parse (unsafeTokenize "OBJ Test test") :: ParseResult SymbolDeclaration
           `shouldSatisfy` isRight
 
-      it "can parse formal var parameter" $
+      it "can parse int symbol" $
         do
-          parse (unsafeTokenize "VAR test") :: ParseResult FormalParameterDeclaration
+          parse (unsafeTokenize "INT test") :: ParseResult SymbolDeclaration
           `shouldSatisfy` isRight
 
     describe "object declarations" $ do
       it "can parse object declaration" $
         do
-          parse (unsafeTokenize "OBJ Test test") :: ParseResult ObjectDeclaration
+          parse (unsafeTokenize "OBJ Test test") :: ParseResult ObjectSymbolDeclaration
           `shouldBe` Right (Object "Test" "test")
 
-    describe "var declarations" $ do
-      it "can parse var declaration" $
+    describe "int declarations" $ do
+      it "can parse int declaration" $
         do
-          parse (unsafeTokenize "VAR test") :: ParseResult VarDeclaration
-          `shouldBe` Right (Var "test")
-
-    describe "const declarations" $ do
-      it "can parse const declaration" $
-        do
-          parse (unsafeTokenize "CONST test = 3") :: ParseResult ConstDeclaration
-          `shouldBe` Right (Const "test" 3)
+          parse (unsafeTokenize "INT test") :: ParseResult IntSymbolDeclaration
+          `shouldBe` Right (Int "test")
 
     describe "class declarations" $ do
       it "can parse class declaration without subclass, without fields and without methods" $
@@ -300,22 +283,22 @@ spec = do
 
       it "can parse class declaration without subclass, one field and one method" $
         do
-          parse (unsafeTokenize "CLASS Test() FIELDS VAR x INIT PRINTI 1 [ METHOD test() PRINTI 1 ]") :: ParseResult ClassDeclaration
+          parse (unsafeTokenize "CLASS Test() FIELDS INT x INIT PRINTI 1 [ METHOD test() PRINTI 1 ]") :: ParseResult ClassDeclaration
           `shouldSatisfy` isRight
 
       it "can parse class declaration with subclass, one field and one method" $
         do
-          parse (unsafeTokenize "CLASS Test() SUBCLASSOF Test FIELDS VAR x INIT PRINTI 1 [ METHOD test() PRINTI 1 ]") :: ParseResult ClassDeclaration
+          parse (unsafeTokenize "CLASS Test() SUBCLASSOF Test FIELDS INT x INIT PRINTI 1 [ METHOD test() PRINTI 1 ]") :: ParseResult ClassDeclaration
           `shouldSatisfy` isRight
 
       it "can parse class declaration with subclass, two fields and one method" $
         do
-          parse (unsafeTokenize "CLASS Test() SUBCLASSOF Test FIELDS VAR x VAR x INIT PRINTI 1 [ METHOD test() PRINTI 1 ]") :: ParseResult ClassDeclaration
+          parse (unsafeTokenize "CLASS Test() SUBCLASSOF Test FIELDS INT x INT x INIT PRINTI 1 [ METHOD test() PRINTI 1 ]") :: ParseResult ClassDeclaration
           `shouldSatisfy` isRight
 
       it "can parse class declaration with subclass, two fields and two methods" $
         do
-          parse (unsafeTokenize "CLASS Test() SUBCLASSOF Test FIELDS VAR x VAR x INIT PRINTI 1 [ METHOD test() PRINTI 1  METHOD test() PRINTI 1 ]") :: ParseResult ClassDeclaration
+          parse (unsafeTokenize "CLASS Test() SUBCLASSOF Test FIELDS INT x INT x INIT PRINTI 1 [ METHOD test() PRINTI 1  METHOD test() PRINTI 1 ]") :: ParseResult ClassDeclaration
           `shouldSatisfy` isRight
 
       it "can not parse class declaration without subclass, no field and one method" $
@@ -325,41 +308,41 @@ spec = do
 
       it "can not parse class declaration without subclass, one field and no method" $
         do
-          parse (unsafeTokenize "CLASS Test() FIELDS VAR x INIT PRINTI 1 [ ]") :: ParseResult ClassDeclaration
+          parse (unsafeTokenize "CLASS Test() FIELDS INT x INIT PRINTI 1 [ ]") :: ParseResult ClassDeclaration
           `shouldSatisfy` isLeft
 
     describe "programs" $ do
       it "can parse program without class or procedure declarations" $
         do
-          parse (unsafeTokenize "DO {VAR x x := 1}") :: ParseResult Program
+          parse (unsafeTokenize "DO {INT x x := 1}") :: ParseResult Program
           `shouldSatisfy` isRight
 
       it "can parse program without class or procedure declarations, but with USING block" $
         do
-          parse (unsafeTokenize "USING [ ] DO {VAR x x := 1}") :: ParseResult Program
+          parse (unsafeTokenize "USING [ ] DO {INT x x := 1}") :: ParseResult Program
           `shouldSatisfy` isRight
 
       it "can parse program with one class and no procedure declarations" $
         do
-          parse (unsafeTokenize "USING [ CLASS Test() FIELDS VAR x INIT PRINTI 1 [ METHOD test() PRINTI 1 ] ] DO {VAR x x := 1}") :: ParseResult Program
+          parse (unsafeTokenize "USING [ CLASS Test() FIELDS INT x INIT PRINTI 1 [ METHOD test() PRINTI 1 ] ] DO {INT x x := 1}") :: ParseResult Program
           `shouldSatisfy` isRight
 
       it "can parse program with no class and one procedure declaration" $
         do
-          parse (unsafeTokenize "USING [ PROCEDURE add(VAR x, VAR y) RETURNS VAR sum { sum := a + b } ] DO {VAR x x := 1}") :: ParseResult Program
+          parse (unsafeTokenize "USING [ PROCEDURE add(INT x, INT y) RETURNS INT sum { sum := a + b } ] DO {INT x x := 1}") :: ParseResult Program
           `shouldSatisfy` isRight
 
       it "can parse program with one class and one procedure declaration" $
         do
-          parse (unsafeTokenize "USING [ CLASS Test() FIELDS VAR x INIT PRINTI 1 [ METHOD test() PRINTI 1 ] PROCEDURE add(VAR x, VAR y) RETURNS VAR sum { sum := a + b } ] DO {VAR x x := 1}") :: ParseResult Program
+          parse (unsafeTokenize "USING [ CLASS Test() FIELDS INT x INIT PRINTI 1 [ METHOD test() PRINTI 1 ] PROCEDURE add(INT x, INT y) RETURNS INT sum { sum := a + b } ] DO {INT x x := 1}") :: ParseResult Program
           `shouldSatisfy` isRight
 
       it "can parse program with two classes and one procedure declaration" $
         do
-          parse (unsafeTokenize "USING [ CLASS Test() FIELDS VAR x INIT PRINTI 1 [ METHOD test() PRINTI 1 ]  CLASS Test() FIELDS VAR x INIT PRINTI 1 [ METHOD test() PRINTI 1 ]  PROCEDURE add(VAR x, VAR y) RETURNS VAR sum { sum := a + b } ] DO {VAR x x := 1}") :: ParseResult Program
+          parse (unsafeTokenize "USING [ CLASS Test() FIELDS INT x INIT PRINTI 1 [ METHOD test() PRINTI 1 ]  CLASS Test() FIELDS INT x INIT PRINTI 1 [ METHOD test() PRINTI 1 ]  PROCEDURE add(INT x, INT y) RETURNS INT sum { sum := a + b } ] DO {INT x x := 1}") :: ParseResult Program
           `shouldSatisfy` isRight
 
       it "can parse program with two classes and two procedure declarations" $
         do
-          parse (unsafeTokenize "USING [ CLASS Test() FIELDS VAR x INIT PRINTI 1 [ METHOD test() PRINTI 1 ]  CLASS Test() FIELDS VAR x INIT PRINTI 1 [ METHOD test() PRINTI 1 ]  PROCEDURE add(VAR x, VAR y) RETURNS VAR sum { sum := a + b }  PROCEDURE add(VAR x, VAR y) RETURNS VAR sum { sum := a + b } ] DO {VAR x x := 1}") :: ParseResult Program
+          parse (unsafeTokenize "USING [ CLASS Test() FIELDS INT x INIT PRINTI 1 [ METHOD test() PRINTI 1 ]  CLASS Test() FIELDS INT x INIT PRINTI 1 [ METHOD test() PRINTI 1 ]  PROCEDURE add(INT x, INT y) RETURNS INT sum { sum := a + b }  PROCEDURE add(INT x, INT y) RETURNS INT sum { sum := a + b } ] DO {INT x x := 1}") :: ParseResult Program
           `shouldSatisfy` isRight

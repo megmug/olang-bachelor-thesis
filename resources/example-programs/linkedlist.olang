@@ -6,15 +6,15 @@ USING [
             PRINTLNS "I am a generic list"
         }
 
-        METHOD insert(VAR newel) RETURNS OBJ ListInterface if {
+        METHOD insert(INT newel) RETURNS OBJ ListInterface if {
             PRINTLNS "I am an abstract method"
         }
     ]
 
-    CLASS List(VAR firstel)
+    CLASS List(INT firstel)
     SUBCLASSOF ListInterface
-    FIELDS VAR element
-           VAR hasnext
+    FIELDS INT element
+           INT hasnext
            OBJ ListInterface next
     INIT {
         this.element := firstel
@@ -31,7 +31,7 @@ USING [
             }
         }
 
-        METHOD insert(VAR newel) RETURNS OBJ List newhead {
+        METHOD insert(INT newel) RETURNS OBJ List newhead {
             IF this.hasnext = 1 THEN {
                 OBJ ListInterface next
                 next := this.next
@@ -46,9 +46,9 @@ USING [
         }
     ]
 
-    CLASS Leaf(VAR el)
+    CLASS Leaf(INT el)
     SUBCLASSOF ListInterface
-    FIELDS VAR element
+    FIELDS INT element
     INIT {
         this.element := el
     }
@@ -58,7 +58,7 @@ USING [
             PRINTLNS ""
         }
 
-        METHOD insert(VAR newel) RETURNS OBJ List newhead {
+        METHOD insert(INT newel) RETURNS OBJ List newhead {
             newhead := List(this.element)
             newhead := newhead.insert(newel)
         }
@@ -71,7 +71,7 @@ USING [
 
     PRINTLNS "Will now insert a few elements into the list"
 
-    VAR i
+    INT i
     i := 2
     WHILE i < 300 DO {
         PRINTS "Inserting element "

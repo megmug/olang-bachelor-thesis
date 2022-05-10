@@ -4,27 +4,23 @@ Program                    ::= ('USING' '[' ClassDeclaration* ProcedureDeclarati
                                'DO' Command
 ClassDeclaration           ::= 'CLASS' ClassName FormalParameterList
                                ('SUBCLASSOF' ClassName)?
-                               ('FIELDS' FieldDeclaration+)?
+                               ('FIELDS' SymbolDeclaration+)?
                                'INIT' Command
                                ('[' MethodDeclaration+ ']')?
-ConstDeclaration           ::= 'CONST' SymbolName '=' Number
-VarDeclaration             ::= 'VAR' SymbolName
-ObjectDeclaration          ::= 'OBJ' ClassName SymbolName
-FormalParameterDeclaration ::= VarDeclaration | ObjectDeclaration
-FormalParameterList        ::= '(' (FormalParameterDeclaration (',' FormalParameterDeclaration)*)? ')'
+IntSymbolDeclaration       ::= 'INT' SymbolName
+ObjectSymbolDeclaration    ::= 'OBJ' ClassName SymbolName
+SymbolDeclaration          ::= IntSymbolDeclaration | ObjectSymbolDeclaration
+FormalParameterList        ::= '(' (SymbolDeclaration (',' SymbolDeclaration)*)? ')'
 ActualParameterList        ::= '(' (Expression (',' Expression)*)? ')'
-FieldDeclaration           ::= FormalParameterDeclaration
 MethodDeclaration          ::= 'METHOD' ProcedureHeader Command
 ProcedureDeclaration       ::= 'PROCEDURE' ProcedureHeader Command
 ProcedureHeader            ::= SymbolName FormalParameterList
-                               ('RETURNS' FormalParameterDeclaration)?
+                               ('RETURNS' SymbolDeclaration)?
                                ('USING' '[' ProcedureDeclaration+ ']')?
 Call                       ::= SymbolReference ActualParameterList?
 SymbolReference            ::= SymbolName ('.' SymbolName)?
 Command                    ::= SymbolReference ':=' Expression
-                             | ConstDeclaration
-                             | VarDeclaration
-                             | ObjectDeclaration
+                             | SymbolDeclaration
                              | 'CALL' Call
                              | 'READ' SymbolName
                              | '{' Command+ '}'

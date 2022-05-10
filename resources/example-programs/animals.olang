@@ -1,6 +1,6 @@
 USING [
-    CLASS Animal(VAR id)
-    FIELDS VAR id
+    CLASS Animal(INT id)
+    FIELDS INT id
     INIT {
         this.id := id
     }
@@ -12,7 +12,7 @@ USING [
         }
     ]
 
-    CLASS Horse(VAR id)
+    CLASS Horse(INT id)
     SUBCLASSOF Animal
     INIT {
         this.id := id

@@ -1,7 +1,7 @@
 USING [
-    CLASS Account(VAR id)
-    FIELDS VAR id
-           VAR balance
+    CLASS Account(INT id)
+    FIELDS INT id
+           INT balance
     INIT {
         this.id := id
         this.balance := 0
@@ -15,7 +15,7 @@ USING [
             PRINTLNS ""
         }
 
-        METHOD addBalance(VAR amount) {
+        METHOD addBalance(INT amount) {
             IF amount < 0 THEN {
                 PRINTLNS "addBalance: amount must not be negative!"
                 ERROR
@@ -23,7 +23,7 @@ USING [
             this.balance := this.balance + amount
         }
 
-        METHOD subtractBalance(VAR amount) {
+        METHOD subtractBalance(INT amount) {
             IF amount < 0 THEN {
                 PRINTLNS "subtractBalance: amount must not be negative!"
                 ERROR
@@ -32,8 +32,8 @@ USING [
         }
     ]
 
-    CLASS Customer(VAR id, OBJ Account acc)
-    FIELDS VAR id
+    CLASS Customer(INT id, OBJ Account acc)
+    FIELDS INT id
            OBJ Account acc
     INIT {
         this.id := id

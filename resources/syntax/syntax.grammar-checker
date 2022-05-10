@@ -22,27 +22,25 @@ ClassDeclaration            -> class classname FormalParameterList
                                ClassDeclaration''' .
 ClassDeclaration'           -> subclassof classname
                              | .
-ClassDeclaration''          -> fields FieldDeclaration FieldDeclaration*
+ClassDeclaration''          -> fields SymbolDeclaration SymbolDeclaration*
                              | .
 ClassDeclaration'''         -> opensquarebracket MethodDeclaration MethodDeclaration* closesquarebracket
                              | .
-ConstDeclaration            -> const symbolname equals number .
-VarDeclaration              -> var symbolname .
-ObjectDeclaration           -> obj classsymbolname symbolname .
-FormalParameterDeclaration  -> VarDeclaration
-                             | ObjectDeclaration .
+IntSymbolDeclaration        -> int symbolname .
+ObjectSymbolDeclaration     -> obj classname symbolname .
+SymbolDeclaration           -> IntSymbolDeclaration
+                             | ObjectSymbolDeclaration .
 FormalParameterList         -> openroundbracket FormalParameterList' closeroundbracket .
-FormalParameterList'        -> FormalParameterDeclaration FormalParameterList''
+FormalParameterList'        -> SymbolDeclaration FormalParameterList''
                              | .
-FormalParameterList''       -> comma FormalParameterDeclaration FormalParameterList''
+FormalParameterList''       -> comma SymbolDeclaration FormalParameterList''
                              | .
 ActualParameterList         -> openroundbracket ActualParameterList' closeroundbracket .
 ActualParameterList'        -> Expression ActualParameterList''
                              | .
 ActualParameterList''       -> comma Expression ActualParameterList''
                              | .
-FieldDeclaration            -> FormalParameterDeclaration .
-FieldDeclaration*           -> FieldDeclaration FieldDeclaration*
+SymbolDeclaration*           -> SymbolDeclaration SymbolDeclaration*
                              | .
 MethodDeclaration           -> method ProcedureHeader Command .
 MethodDeclaration*          -> MethodDeclaration MethodDeclaration*
@@ -51,7 +49,7 @@ ProcedureDeclaration        -> procedure ProcedureHeader Command .
 ProcedureHeader             -> symbolname FormalParameterList
                                ProcedureHeader'
                                ProcedureHeader'' .
-ProcedureHeader'            -> returns FormalParameterDeclaration
+ProcedureHeader'            -> returns SymbolDeclaration
                              | .
 ProcedureHeader''           -> using opensquarebracket ProcedureDeclaration ProcedureDeclaration* closesquarebracket
                              | .
@@ -64,9 +62,7 @@ SymbolReference             -> symbolname SymbolReference' .
 SymbolReference'            -> dot symbolname
                              | .
 Command                     -> SymbolReference assignment Expression
-                             | ConstDeclaration
-                             | VarDeclaration
-                             | ObjectDeclaration
+                             | SymbolDeclaration
                              | call Call
                              | read symbolname
                              | opencurlybracket Command Command* closecurlybracket

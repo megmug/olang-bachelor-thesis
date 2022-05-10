@@ -25,7 +25,7 @@ spec = do
         do
           calculateCommandStackMemoryRequirements
             ( unsafeParseCommand
-                "{ VAR m \
+                "{ INT m \
                 \ m := 2 \
                 \ isprime := 1 \
                 \ WHILE m < n DO { \
@@ -37,8 +37,8 @@ spec = do
             `shouldBe` 1
           calculateCommandStackMemoryRequirements
             ( unsafeParseCommand
-                "{ VAR m \
-                \ VAR n }" ::
+                "{ INT m \
+                \ INT n }" ::
                 SyntaxTree.Command
             )
             `shouldBe` 2
@@ -50,10 +50,10 @@ spec = do
             `shouldBe` 0
       it "can calculate complicated command mem requirements correctly" $
         do
-          calculateCommandStackMemoryRequirements (unsafeParseCommand "{VAR m {VAR n}}") `shouldBe` 2
-          calculateCommandStackMemoryRequirements (unsafeParseCommand "{{VAR n} VAR m}") `shouldBe` 1
-          calculateCommandStackMemoryRequirements (unsafeParseCommand "{VAR m {VAR n} VAR l}") `shouldBe` 2
-          calculateCommandStackMemoryRequirements (unsafeParseCommand "{VAR m {VAR n VAR k} VAR l}") `shouldBe` 3
+          calculateCommandStackMemoryRequirements (unsafeParseCommand "{INT m {INT n}}") `shouldBe` 2
+          calculateCommandStackMemoryRequirements (unsafeParseCommand "{{INT n} INT m}") `shouldBe` 1
+          calculateCommandStackMemoryRequirements (unsafeParseCommand "{INT m {INT n} INT l}") `shouldBe` 2
+          calculateCommandStackMemoryRequirements (unsafeParseCommand "{INT m {INT n INT k} INT l}") `shouldBe` 3
 
   describe "compiling test programs" $ do
     it "can not compile illegalreference program" $ do
