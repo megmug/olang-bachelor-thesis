@@ -1,15 +1,23 @@
 module IntegrationSpec where
 
-import CodeGenerator
-import Command
+import CodeGenerator (Generatable (generate))
+import Command (Command)
 import Control.DeepSeq (force)
 import Control.Exception (evaluate)
-import Data.Either
-import Machine
-import Parser
-import SyntaxTree
+import Data.Either (fromRight, isRight)
+import Machine (runTest)
+import Parser (Parseable (parse))
+import SyntaxTree (Command (Read), Program (..))
 import Test.Hspec
-import Tokenizer
+  ( Spec,
+    anyArithException,
+    describe,
+    it,
+    shouldBe,
+    shouldSatisfy,
+    shouldThrow,
+  )
+import Tokenizer (tokenize)
 
 unsafeParseProgram :: String -> Program
 unsafeParseProgram = fromRight (Program [] [] (SyntaxTree.Read "")) . parse . fromRight [] . tokenize

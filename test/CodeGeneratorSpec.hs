@@ -1,12 +1,15 @@
 module CodeGeneratorSpec where
 
 import CodeGenerator
-import Command
-import Data.Either
-import Parser
-import SyntaxTree
-import Test.Hspec
-import Tokenizer
+  ( Generatable (generate),
+    calculateCommandStackMemoryRequirements,
+  )
+import Command (Command)
+import Data.Either (fromRight, isLeft, isRight)
+import Parser (Parseable (parse))
+import SyntaxTree (Command (Read), Program (..))
+import Test.Hspec (Spec, describe, it, shouldBe, shouldSatisfy)
+import Tokenizer (tokenize)
 
 unsafeParseCommand :: String -> SyntaxTree.Command
 unsafeParseCommand = fromRight (SyntaxTree.Read "") . parse . fromRight [] . tokenize

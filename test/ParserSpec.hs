@@ -1,11 +1,32 @@
 module ParserSpec where
 
-import Data.Either
-import Parser
+import Data.Either (fromRight, isLeft, isRight)
+import Parser (ParseResult, Parseable (parse))
 import SyntaxTree
-import Test.Hspec
-import Token
-import Tokenizer
+  ( ActualParameterList,
+    Call (SymbolReference),
+    ClassDeclaration,
+    Command,
+    Condition,
+    Expression,
+    Factor (CallFactor, Number),
+    FormalParameterList,
+    IntSymbolDeclaration (..),
+    MethodDeclaration,
+    ObjectSymbolDeclaration (..),
+    Operator (..),
+    ProcedureDeclaration,
+    ProcedureHeader,
+    Program,
+    Relation (..),
+    Sign (..),
+    SymbolDeclaration,
+    SymbolReference (FieldReference, NameReference),
+    Term,
+  )
+import Test.Hspec (Spec, describe, it, shouldBe, shouldSatisfy)
+import Token (TokenPos)
+import Tokenizer (tokenize)
 
 unsafeTokenize :: String -> [TokenPos]
 unsafeTokenize = fromRight [] . tokenize

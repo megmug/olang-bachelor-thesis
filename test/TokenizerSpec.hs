@@ -1,8 +1,8 @@
 module TokenizerSpec where
 
-import Data.Either
-import Test.Hspec
-import Tokenizer
+import Data.Either (isRight)
+import Test.Hspec (Spec, describe, it, shouldSatisfy)
+import Tokenizer (tokenize)
 
 spec :: Spec
 spec = do
