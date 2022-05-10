@@ -26,9 +26,9 @@ ClassDeclaration''          -> fields FieldDeclaration FieldDeclaration*
                              | .
 ClassDeclaration'''         -> opensquarebracket MethodDeclaration MethodDeclaration* closesquarebracket
                              | .
-ConstDeclaration            -> const name equals number .
-VarDeclaration              -> var name .
-ObjectDeclaration           -> obj classname name .
+ConstDeclaration            -> const symbolname equals number .
+VarDeclaration              -> var symbolname .
+ObjectDeclaration           -> obj classsymbolname symbolname .
 FormalParameterDeclaration  -> VarDeclaration
                              | ObjectDeclaration .
 FormalParameterList         -> openroundbracket FormalParameterList' closeroundbracket .
@@ -48,7 +48,7 @@ MethodDeclaration           -> method ProcedureHeader Command .
 MethodDeclaration*          -> MethodDeclaration MethodDeclaration*
                              | .
 ProcedureDeclaration        -> procedure ProcedureHeader Command .
-ProcedureHeader             -> name FormalParameterList
+ProcedureHeader             -> symbolname FormalParameterList
                                ProcedureHeader'
                                ProcedureHeader'' .
 ProcedureHeader'            -> returns FormalParameterDeclaration
@@ -60,15 +60,15 @@ ProcedureDeclaration*       -> ProcedureDeclaration ProcedureDeclaration*
 Call                        -> SymbolReference Call' .
 Call'                       -> ActualParameterList
                              | .
-SymbolReference             -> name SymbolReference' .
-SymbolReference'            -> dot name
+SymbolReference             -> symbolname SymbolReference' .
+SymbolReference'            -> dot symbolname
                              | .
 Command                     -> SymbolReference assignment Expression
                              | ConstDeclaration
                              | VarDeclaration
                              | ObjectDeclaration
                              | call Call
-                             | read name
+                             | read symbolname
                              | opencurlybracket Command Command* closecurlybracket
                              | if Condition then Command
                              | while Condition do Command
@@ -97,11 +97,11 @@ Term'                       -> Term'' Factor Term'
 Term''                      -> times
                              | divide .
 Factor                      -> Call
-                             | className ActualParameterList
+                             | classname ActualParameterList
                              | number
                              | openroundbracket Expression closeroundbracket .
 
-/*  Name: lowerCamelCase alpha string w/o spaces
+/*  SymbolName: lowerCamelCase alpha string w/o spaces
  *  Number: numeric string w/o spaces
  *  String: any string, enclosed in " "
  *  ClassName: CamelCase alpha string w/o spaces
