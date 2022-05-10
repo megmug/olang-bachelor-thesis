@@ -11,8 +11,8 @@ spec = do
       tokenize "hello := 1 + 1" `shouldSatisfy` isRight
 
     it "can tokenize all zero-argument tokens seperated by spaces" $ do
-      tokenize "PROGRAM USING CLASS SUBCLASSOF FIELDS INIT OBJ STATIC CONST VAR PROCEDURE METHOD RETURNS CALL READ WRITE IF THEN WHILE DO ERROR NOT := = , . > < + - * / ( ) [ ] { }"
+      tokenize "USING CLASS SUBCLASSOF FIELDS INIT OBJ STATIC CONST VAR PROCEDURE METHOD RETURNS CALL READ WRITE IF THEN WHILE DO ERROR NOT := = , . > < + - * / ( ) [ ] { }"
         `shouldSatisfy` isRight
 
     it "can tokenize simple program" $ do
-      tokenize "PROGRAM hello DO {VAR x x := 1}" `shouldSatisfy` isRight
+      tokenize "DO {VAR x x := 1}" `shouldSatisfy` isRight
