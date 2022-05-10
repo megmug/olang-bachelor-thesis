@@ -45,7 +45,7 @@ data Token
   | CloseSquareBracket
   | OpenCurlyBracket
   | CloseCurlyBracket
-  | Name String
+  | SymbolName String
   | ClassName String
   | String String
   | Number Integer

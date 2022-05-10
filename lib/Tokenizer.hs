@@ -89,12 +89,12 @@ lowerchar = ['a' .. 'z']
 upperchar = ['A' .. 'Z']
 
 -- here we define a few tokenizers for parsing non-atomic tokens
-name :: UnitTokenizer
-name = do
+symbolname :: UnitTokenizer
+symbolname = do
   p <- getPosition
   h <- satisfy (`elem` lowerchar)
   n <- many $ satisfy (`elem` lowerchar ++ upperchar)
-  return (Name $ h : n, p)
+  return (SymbolName $ h : n, p)
 
 classname :: UnitTokenizer
 classname = do
@@ -116,7 +116,7 @@ number = do
   return (Number $ read ds, p)
 
 someToken :: UnitTokenizer
-someToken = choice $ try <$> unittokenizers ++ [name, classname, tString, number]
+someToken = choice $ try <$> unittokenizers ++ [symbolname, classname, tString, number]
 
 anyIgnored :: Ignorer
 anyIgnored = choice [space, endOfLine, tab]

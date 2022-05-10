@@ -98,19 +98,19 @@ constdeclaration :: Parser ConstDeclaration
 constdeclaration = parser
 
 instance Parseable ConstDeclaration where
-  parser = Const <$> (accept CONST *> acceptName) <*> (accept (:=) *> acceptNumber)
+  parser = Const <$> (accept CONST *> acceptSymbolName) <*> (accept (:=) *> acceptNumber)
 
 vardeclaration :: Parser VarDeclaration
 vardeclaration = parser
 
 instance Parseable VarDeclaration where
-  parser = Var <$> (accept VAR *> acceptName)
+  parser = Var <$> (accept VAR *> acceptSymbolName)
 
 objectdeclaration :: Parser ObjectDeclaration
 objectdeclaration = parser
 
 instance Parseable ObjectDeclaration where
-  parser = Object <$> (accept OBJ *> acceptClassName) <*> acceptName
+  parser = Object <$> (accept OBJ *> acceptClassName) <*> acceptSymbolName
 
 formalparameterdeclaration :: Parser FormalParameterDeclaration
 formalparameterdeclaration = parser
@@ -165,7 +165,7 @@ procedureheader = parser
 
 instance Parseable ProcedureHeader where
   parser =
-    ProcedureHeader <$> acceptName
+    ProcedureHeader <$> acceptSymbolName
       <*> formalparameterlist
       <*> optionMaybe (accept RETURNS *> formalparameterdeclaration)
       <*> do
@@ -190,8 +190,8 @@ symbolreference = parser
 
 instance Parseable SymbolReference where
   parser = do
-    n <- acceptName
-    mn <- optionMaybe $ accept (:.) *> acceptName
+    n <- acceptSymbolName
+    mn <- optionMaybe $ accept (:.) *> acceptSymbolName
     return
       ( case mn of
           Nothing -> NameReference n
@@ -208,7 +208,7 @@ instance Parseable Command where
       <|> VarDeclarationCommand <$> vardeclaration
       <|> ObjectDeclarationCommand <$> objectdeclaration
       <|> CallCommand <$> (accept CALL *> call)
-      <|> Read <$> (accept READ *> acceptName)
+      <|> Read <$> (accept READ *> acceptSymbolName)
       <|> Block <$> (fromList <$> (accept OpenCurlyBracket *> many1 command <* accept CloseCurlyBracket))
       <|> IfThen <$> (accept IF *> condition) <*> (accept THEN *> command)
       <|> While <$> (accept WHILE *> condition) <*> (accept DO *> command)
@@ -293,8 +293,8 @@ advance :: SourcePos -> t -> [TokenPos] -> SourcePos
 advance _ _ ((_, pos) : _) = pos
 advance pos _ [] = pos
 
-acceptName :: Parser String
-acceptName = tokenPrim show advance (\t -> case t of (Name n, _) -> Just n; _ -> Nothing)
+acceptSymbolName :: Parser String
+acceptSymbolName = tokenPrim show advance (\t -> case t of (SymbolName n, _) -> Just n; _ -> Nothing)
 
 acceptClassName :: Parser String
 acceptClassName = tokenPrim show advance (\t -> case t of (ClassName n, _) -> Just n; _ -> Nothing)

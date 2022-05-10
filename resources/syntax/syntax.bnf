@@ -7,26 +7,26 @@ ClassDeclaration           ::= 'CLASS' ClassName FormalParameterList
                                ('FIELDS' FieldDeclaration+)?
                                'INIT' Command
                                ('[' MethodDeclaration+ ']')?
-ConstDeclaration           ::= 'CONST' Name '=' Number
-VarDeclaration             ::= 'VAR' Name
-ObjectDeclaration          ::= 'OBJ' ClassName Name
+ConstDeclaration           ::= 'CONST' SymbolName '=' Number
+VarDeclaration             ::= 'VAR' SymbolName
+ObjectDeclaration          ::= 'OBJ' ClassName SymbolName
 FormalParameterDeclaration ::= VarDeclaration | ObjectDeclaration
 FormalParameterList        ::= '(' (FormalParameterDeclaration (',' FormalParameterDeclaration)*)? ')'
 ActualParameterList        ::= '(' (Expression (',' Expression)*)? ')'
 FieldDeclaration           ::= FormalParameterDeclaration
 MethodDeclaration          ::= 'METHOD' ProcedureHeader Command
 ProcedureDeclaration       ::= 'PROCEDURE' ProcedureHeader Command
-ProcedureHeader            ::= Name FormalParameterList
+ProcedureHeader            ::= SymbolName FormalParameterList
                                ('RETURNS' FormalParameterDeclaration)?
                                ('USING' '[' ProcedureDeclaration+ ']')?
 Call                       ::= SymbolReference ActualParameterList?
-SymbolReference            ::= Name ('.' Name)?
+SymbolReference            ::= SymbolName ('.' SymbolName)?
 Command                    ::= SymbolReference ':=' Expression
                              | ConstDeclaration
                              | VarDeclaration
                              | ObjectDeclaration
                              | 'CALL' Call
-                             | 'READ' Name
+                             | 'READ' SymbolName
                              | '{' Command+ '}'
                              | 'IF' Condition 'THEN' Command
                              | 'WHILE' Condition 'DO' Command
@@ -43,7 +43,7 @@ Factor                     ::= Call
                              | Number
                              | '(' Expression ')'
 
-/*  Name: lowerCamelCase alpha string w/o spaces
+/*  SymbolName: lowerCamelCase alpha string w/o spaces
  *  Number: numeric string w/o spaces
  *  String: any string, enclosed in " "
  *  ClassName: CamelCase alpha string w/o spaces

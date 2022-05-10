@@ -11,7 +11,7 @@ import Data.List.NonEmpty ( NonEmpty )
  -}
 type ClassName = String
 
-type Name = String
+type SymbolName = String
 
 type Number = Integer
 
@@ -40,11 +40,11 @@ data ClassDeclaration
       [MethodDeclaration]
   deriving (Eq, Show)
 
-data ConstDeclaration = Const Name Number deriving (Eq, Show)
+data ConstDeclaration = Const SymbolName Number deriving (Eq, Show)
 
-data VarDeclaration = Var Name deriving (Eq, Show)
+data VarDeclaration = Var SymbolName deriving (Eq, Show)
 
-data ObjectDeclaration = Object ClassName Name deriving (Eq, Show)
+data ObjectDeclaration = Object ClassName SymbolName deriving (Eq, Show)
 
 data FormalParameterDeclaration
   = VarParameter VarDeclaration
@@ -59,7 +59,7 @@ data ProcedureDeclaration = Procedure ProcedureHeader Command deriving (Eq, Show
 
 data ProcedureHeader
   = ProcedureHeader
-      Name
+      SymbolName
       FormalParameterList
       (Maybe ReturnParameterDeclaration)
       [ProcedureDeclaration]
@@ -71,8 +71,8 @@ data Call
   deriving (Eq, Show)
 
 data SymbolReference
-  = NameReference Name
-  | FieldReference Name Name
+  = NameReference SymbolName
+  | FieldReference SymbolName SymbolName
   deriving (Eq, Show)
 
 data Command
@@ -81,7 +81,7 @@ data Command
   | VarDeclarationCommand VarDeclaration
   | ObjectDeclarationCommand ObjectDeclaration
   | CallCommand Call
-  | Read Name
+  | Read SymbolName
   | Block (NonEmpty Command)
   | IfThen Condition Command
   | While Condition Command
