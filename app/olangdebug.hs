@@ -1,10 +1,10 @@
-import CodeGenerator
-import Machine
-import Parser
-import SyntaxTree
-import System.Environment
-import System.IO
-import Tokenizer
+import CodeGenerator ( Generatable(generate) )
+import Machine ( runDebug )
+import Parser ( ParseResult, Parseable(parse) )
+import SyntaxTree ( Program )
+import System.Environment ( getArgs )
+import System.IO ( stdout, hSetBuffering, BufferMode(NoBuffering) )
+import Tokenizer ( tokenize )
 
 main :: IO ()
 main = do
