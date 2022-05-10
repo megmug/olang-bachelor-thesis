@@ -9,7 +9,7 @@ import SyntaxTree
     Command,
     Condition,
     Expression,
-    Factor (CallFactor, Number),
+    Factor (CallFactor, Integer),
     FormalParameterList,
     IntSymbolDeclaration (..),
     MethodDeclaration,
@@ -75,7 +75,7 @@ spec = do
       it "can parse number factor" $
         do
           parse (unsafeTokenize "1234") :: ParseResult Factor
-          `shouldBe` Right (SyntaxTree.Number 1234)
+          `shouldBe` Right (SyntaxTree.Integer 1234)
 
       it "can parse composite factor" $
         do

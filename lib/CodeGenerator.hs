@@ -931,7 +931,7 @@ instance Typeable Term where
 instance Generatable Factor where
   generator (CallFactor c) = generator c
   generator (ClassInstantiation cn apl) = generator (Call (NameReference $ "INIT_" ++ cn) apl)
-  generator (Number n) = do
+  generator (Integer n) = do
     prefixlength += 1
     return [PushInt n]
   generator (CompositeFactor e) = generator e
@@ -941,7 +941,7 @@ instance Typeable Factor where
   typifier (CallFactor c) = typifier c
   -- a class instantiation unsurprisingly has the same type as the corresponding initializer/constructor
   typifier (ClassInstantiation cn apl) = typifier (Call (NameReference $ "INIT_" ++ cn) apl)
-  typifier (Number n) = return $ Just INT
+  typifier (Integer n) = return $ Just INT
   typifier (CompositeFactor e) = typifier e
 
 {--}

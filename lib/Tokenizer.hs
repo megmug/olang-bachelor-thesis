@@ -112,7 +112,7 @@ number :: UnitTokenizer
 number = do
   p <- getPosition
   ds <- many1 digit
-  return (Number $ read ds, p)
+  return (Integer $ read ds, p)
 
 someToken :: UnitTokenizer
 someToken = choice $ try <$> unittokenizers ++ [symbolname, classname, tString, number]

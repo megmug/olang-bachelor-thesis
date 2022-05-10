@@ -245,7 +245,7 @@ instance Parseable Factor where
   parser =
     (CallFactor <$> call)
       <|> (ClassInstantiation <$> acceptClassName <*> actualparameterlist)
-      <|> (SyntaxTree.Number <$> acceptNumber)
+      <|> (SyntaxTree.Integer <$> acceptInteger)
       <|> (CompositeFactor <$> (accept OpenRoundBracket *> expression <* accept CloseRoundBracket))
 
 operator :: Parser Operator
@@ -286,8 +286,8 @@ acceptClassName = tokenPrim show advance (\t -> case t of (ClassName n, _) -> Ju
 acceptString :: Parser String
 acceptString = tokenPrim show advance (\t -> case t of (String s, _) -> Just s; _ -> Nothing)
 
-acceptNumber :: Parser Integer
-acceptNumber = tokenPrim show advance (\t -> case t of (Token.Number n, _) -> Just n; _ -> Nothing)
+acceptInteger :: Parser Integer
+acceptInteger = tokenPrim show advance (\t -> case t of (Token.Integer n, _) -> Just n; _ -> Nothing)
 
 satisfy :: (Token -> Bool) -> Parser Token
 satisfy p = tokenPrim show advance (\(t, _) -> if p t then Just t else Nothing)

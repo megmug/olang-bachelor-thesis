@@ -13,8 +13,6 @@ type ClassName = String
 
 type SymbolName = String
 
-type Number = Integer
-
 type Initializer = Command
 
 type ActualParameterList = [Expression]
@@ -104,7 +102,7 @@ data Term
 data Factor
   = CallFactor Call
   | ClassInstantiation ClassName ActualParameterList
-  | Number Number
+  | Integer Integer
   | CompositeFactor Expression
   deriving (Eq, Show)
 

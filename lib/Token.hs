@@ -47,5 +47,5 @@ data Token
   | SymbolName String
   | ClassName String
   | String String
-  | Number Integer
+  | Integer Integer
   deriving (Eq, Show)
