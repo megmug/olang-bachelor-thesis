@@ -1,12 +1,13 @@
 module ParserSpec where
 
 import Data.Either
-import Data.Maybe
 import Parser
 import SyntaxTree
 import Test.Hspec
 import Tokenizer
+import Token
 
+unsafeTokenize :: String -> [TokenPos]
 unsafeTokenize = fromRight [] . tokenize
 
 spec :: Spec
@@ -53,7 +54,7 @@ spec = do
       it "can parse number factor" $
         do
           parse (unsafeTokenize "1234") :: ParseResult Factor
-          `shouldBe` Right (Number 1234)
+          `shouldBe` Right (SyntaxTree.Number 1234)
 
       it "can parse composite factor" $
         do

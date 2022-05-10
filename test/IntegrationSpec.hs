@@ -5,12 +5,10 @@ import Command
 import Control.DeepSeq (force)
 import Control.Exception (evaluate)
 import Data.Either
-import Data.Maybe
 import Machine
 import Parser
 import SyntaxTree
 import Test.Hspec
-import qualified Text.Parsec as Text.Parsec.Error
 import Tokenizer
 
 unsafeParseProgram :: String -> Program
@@ -28,13 +26,13 @@ spec = do
       let ackOutput = runTest ackProgram ["3", "3"]
       ackOutput `shouldSatisfy` isRight
       case ackOutput of
-        Left err -> return ()
+        Left _ -> return ()
         Right out -> out `shouldBe` "61\nProgram terminated successfully.\n"
 
       let sndAckOutput = runTest ackProgram ["3", "4"]
       sndAckOutput `shouldSatisfy` isRight
       case sndAckOutput of
-        Left err -> return ()
+        Left _ -> return ()
         Right out -> out `shouldBe` "125\nProgram terminated successfully.\n"
 
     it "dividing by zero throws an exception" $ do

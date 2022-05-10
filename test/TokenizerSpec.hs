@@ -2,7 +2,6 @@ module TokenizerSpec where
 
 import Data.Either
 import Test.Hspec
-import Token
 import Tokenizer
 
 spec :: Spec

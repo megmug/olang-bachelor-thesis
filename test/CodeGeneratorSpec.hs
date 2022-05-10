@@ -3,11 +3,9 @@ module CodeGeneratorSpec where
 import CodeGenerator
 import Command
 import Data.Either
-import Data.Maybe
 import Parser
 import SyntaxTree
 import Test.Hspec
-import qualified Text.Parsec as Text.Parsec.Error
 import Tokenizer
 
 unsafeParseCommand :: String -> SyntaxTree.Command
