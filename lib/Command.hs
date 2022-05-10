@@ -1,7 +1,5 @@
 module Command where
 
---data Address = Address Int
-
 -- A code address represents an index into the code segment of the machine
 type CodeAddress = Int
 
