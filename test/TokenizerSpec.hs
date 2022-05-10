@@ -6,7 +6,7 @@ import Tokenizer
 
 spec :: Spec
 spec = do
-  describe "basic tests" $ do
+  describe "tokenizer tests" $ do
     it "can tokenize simple assignment command" $ do
       tokenize "hello := 1 + 1" `shouldSatisfy` isRight
 
