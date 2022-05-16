@@ -1,8 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeSynonymInstances #-}
-{-# HLINT ignore "Avoid lambda" #-}
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 module CodeGenerator where
 
@@ -45,7 +43,6 @@ import Command
   )
 import Control.Lens (use, view, (%=), (+=), (.=))
 import Control.Monad (when)
-import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
 import Control.Monad.Trans.Reader (Reader, runReader)
 import Control.Monad.Trans.State (State, evalState)
@@ -73,6 +70,8 @@ import SyntaxTree
     SymbolReference (FieldReference, NameReference),
     Term (..),
   )
+
+{-# ANN module ("hlint: ignore Avoid lambda") #-}
 
 {- Basic helper type definitions -}
 -- A symbol has a name, can be const and has a type as well as a position in the local variable segment on the stack
@@ -225,7 +224,7 @@ class Typeable a where
 
 {- Other helper functions -}
 replaceClassInTable :: ClassID -> ClassEntry -> ClassTable -> ClassTable
-replaceClassInTable id c ct = (id, c) : filter ((/=) id . fst) ct
+replaceClassInTable cid c ct = (cid, c) : filter ((/=) cid . fst) ct
 
 lookupClassByName :: String -> ClassTable -> Maybe (ClassID, ClassEntry)
 lookupClassByName name ct =
@@ -262,19 +261,19 @@ addParamsToSymbols st [] = st
 addParamsToSymbols st (p : ps) = addParamsToSymbols (addParamToSymbols st p) ps
   where
     addParamToSymbols :: SymTable -> SymbolDeclaration -> SymTable
-    addParamToSymbols st (IntDeclaration (Int n)) = addSymbol st n INT
-    addParamToSymbols st (ObjectDeclaration (Object t n)) = addSymbol st n (OBJ t)
+    addParamToSymbols st' (IntDeclaration (Int n)) = addSymbol st' n INT
+    addParamToSymbols st' (ObjectDeclaration (Object t n)) = addSymbol st' n (OBJ t)
 
 addSymbol :: SymTable -> String -> Type -> SymTable
 addSymbol st name t = SymbolEntry name t (length st) : st
 
 lookupSymbol :: SymTable -> String -> Maybe SymbolEntry
 lookupSymbol st n =
-  let hits = [s | s@(SymbolEntry n' t _) <- st, n == n']
+  let hits = [s | s@(SymbolEntry n' _ _) <- st, n == n']
    in if hits /= [] then Just $ head hits else Nothing
 
 lookupFieldByName :: FieldTable -> String -> Maybe FieldEntry
-lookupFieldByName [] fn = Nothing
+lookupFieldByName [] _ = Nothing
 lookupFieldByName (fe@(FieldEntry n _ _) : ft) fn
   | fn == n = Just fe
   | otherwise = lookupFieldByName ft fn
@@ -300,27 +299,27 @@ lookupClosestMatchingMethod ct st o m ts = do
     Just (SymbolEntry _ INT _) -> Left $ "method call on INT symbol " ++ o
     Just (SymbolEntry _ (OBJ cn) _) -> case lookupClassByName cn ct of
       Nothing -> Left $ "BUG encountered: undefined class for symbol " ++ o
-      Just (_, ClassEntry cn _ _ mt) -> do
-        let matchingMethods = filter (matchesNameAndType ct m ts) mt
+      Just (_, ClassEntry cn' _ _ mt) -> do
+        let matchingMethods = filter (matchesNameAndType' ct m ts) mt
         if null matchingMethods
-          then Left $ "no matching method definition found for method " ++ m ++ " of class " ++ cn ++ " with actual parameter types " ++ show ts
+          then Left $ "no matching method definition found for method " ++ m ++ " of class " ++ cn' ++ " with actual parameter types " ++ show ts
           else -- if there are matching methods, get the lower bound according to the type partial order on lists
           case getTypeLowerBoundMethod ct matchingMethods matchingMethods of
-            Nothing -> Left $ "ambiguous type match for method " ++ m ++ " of class " ++ cn ++ " with actual parameter types " ++ show ts
+            Nothing -> Left $ "ambiguous type match for method " ++ m ++ " of class " ++ cn' ++ " with actual parameter types " ++ show ts
             Just me -> Right me
   where
-    matchesNameAndType ct n ts (id, ProcEntry (Signature n' ts' _) _) = n == n' && areSubtypesOf ct ts ts'
-    getTypeLowerBoundMethod ct [] ps = Nothing
-    getTypeLowerBoundMethod ct (lp : lps) ps =
-      if isTypeLowerBoundOf ct (getInputTypes . snd $ lp) (map (getInputTypes . snd) ps)
+    matchesNameAndType' ct' n ts' (_, ProcEntry (Signature n' ts'' _) _) = n == n' && areSubtypesOf ct' ts' ts''
+    getTypeLowerBoundMethod _ [] _ = Nothing
+    getTypeLowerBoundMethod ct' (lp : lps) ps =
+      if isTypeLowerBoundOf ct' (getInputTypes . snd $ lp) (map (getInputTypes . snd) ps)
         then Just lp
-        else getTypeLowerBoundMethod ct lps ps
+        else getTypeLowerBoundMethod ct' lps ps
 
 matchesNameAndType :: ClassTable -> String -> [Type] -> ProcEntry -> Bool
 matchesNameAndType ct n ts (ProcEntry (Signature n' ts' _) _) = n == n' && areSubtypesOf ct ts ts'
 
 getTypeLowerBoundProc :: ClassTable -> [ProcEntry] -> [ProcEntry] -> Maybe ProcEntry
-getTypeLowerBoundProc ct [] ps = Nothing
+getTypeLowerBoundProc _ [] _ = Nothing
 getTypeLowerBoundProc ct (lp : lps) ps =
   if isTypeLowerBoundOf ct (getInputTypes lp) (map getInputTypes ps)
     then Just lp
@@ -341,7 +340,7 @@ hasNameCollisions (p : fpl) = any (hasSameName p) fpl || hasNameCollisions fpl
     hasSameName (IntDeclaration (Int n)) (IntDeclaration (Int n')) = n == n'
     hasSameName (ObjectDeclaration (Object _ n)) (ObjectDeclaration (Object _ n')) = n == n'
     hasSameName (IntDeclaration (Int n)) (ObjectDeclaration (Object _ n')) = n == n'
-    hasSameName p p' = hasSameName p' p
+    hasSameName p' p'' = hasSameName p' p''
 
 isIntType :: OptionalType -> Bool
 isIntType Nothing = False
@@ -392,11 +391,11 @@ instance Generatable Program where
     return programCommands
     where
       getMTables ct = map getMTable ct
-      getMTable (id, ClassEntry _ _ _ mt) = CreateMethodTable id (map getMethodAddress mt)
-      getMethodAddress (id, ProcEntry _ a) = (id, a)
+      getMTable (cid, ClassEntry _ _ _ mt) = CreateMethodTable cid (map getMethodAddress mt)
+      getMethodAddress (cid, ProcEntry _ a) = (cid, a)
 
 instance Generatable ClassDeclaration where
-  generator (Class n ps mc fields init methods) = do
+  generator (Class n ps mc fields ini methods) = do
     {- Generate template class table entry with inheritance information and add fields -}
     ct <- use classtable
     let newClassID = length ct
@@ -414,25 +413,25 @@ instance Generatable ClassDeclaration where
     classtable .= (newClassID, template) : ct
     traverse_ (addFieldToClassEntry newClassID) fields
     {- Generate initializer as procedure with object 'this' as implicit return parameter and preceding memory allocation -}
-    let initProcedure = Procedure (ProcedureHeader ("INIT_" ++ n) ps (Just $ ObjectDeclaration $ Object n "this") []) init
+    let initProcedure = Procedure (ProcedureHeader ("INIT_" ++ n) ps (Just $ ObjectDeclaration $ Object n "this") []) ini
     initCommands <- contextGenerator INIT initProcedure
     {- Generate methods -}
     methodCommands <- traverse (contextGenerator newClassID) methods
     return $ initCommands ++ concat methodCommands
     where
       addFieldToClassEntry :: ClassID -> SymbolDeclaration -> GeneratorAction ()
-      addFieldToClassEntry id sd = do
+      addFieldToClassEntry cid sd = do
         ct <- use classtable
-        case lookup id ct of
+        case lookup cid ct of
           Nothing -> throwE "BUG encountered: trying to add field to non-existing class!"
           Just (ClassEntry cn ucc ft mt) -> case sd of
-            IntDeclaration (Int n) -> classtable %= replaceClassInTable id (ClassEntry cn ucc (FieldEntry n INT (length ft) : ft) mt)
-            ObjectDeclaration (Object t n) -> case lookupClassByName t ct of
-              Nothing -> throwE $ "field " ++ n ++ " of class " ++ cn ++ " has invalid type " ++ t ++ "!"
-              Just _ -> classtable %= replaceClassInTable id (ClassEntry cn ucc (FieldEntry n (OBJ t) (length ft) : ft) mt)
+            IntDeclaration (Int sn) -> classtable %= replaceClassInTable cid (ClassEntry cn ucc (FieldEntry sn INT (length ft) : ft) mt)
+            ObjectDeclaration (Object t sn) -> case lookupClassByName t ct of
+              Nothing -> throwE $ "field " ++ sn ++ " of class " ++ cn ++ " has invalid type " ++ t ++ "!"
+              Just _ -> classtable %= replaceClassInTable cid (ClassEntry cn ucc (FieldEntry sn (OBJ t) (length ft) : ft) mt)
 
 instance ContextGeneratable ClassID MethodDeclaration where
-  contextGenerator id (Method (ProcedureHeader n pl mrp ps) c) = do
+  contextGenerator cid (Method (ProcedureHeader n pl mrp ps) c) = do
     {- Insert new entry / Override existing into method table of corresponding class -}
     -- Check for duplicate parameter names
     when (hasNameCollisions pl) $ throwE $ "parameter list of procedure " ++ n ++ " has duplicates"
@@ -440,7 +439,7 @@ instance ContextGeneratable ClassID MethodDeclaration where
     prefixlength += 1
     methodCodeStart <- use prefixlength
     let newMethodEntry = ProcEntry (Signature n (map symbolDeclToType pl) (symbolDeclToType <$> mrp)) methodCodeStart
-    updateClassTableWithNewMethod id newMethodEntry
+    updateClassTableWithNewMethod cid newMethodEntry
     {- Generate sub-procedures -}
     -- Save the old procedure table for the reset later
     oldpt <- use proctable
@@ -448,9 +447,9 @@ instance ContextGeneratable ClassID MethodDeclaration where
     subProcedureCommands <- traverse (contextGenerator NORMAL) ps
     {- Insert object, parameters and return parameter into symbol table -}
     ct <- use classtable
-    thisParam <- case lookup id ct of
+    thisParam <- case lookup cid ct of
       Nothing -> throwE "BUG encountered: method has no corresponding class!"
-      Just (ClassEntry n _ _ _) -> return $ ObjectDeclaration $ Object n "this"
+      Just (ClassEntry cn _ _ _) -> return $ ObjectDeclaration $ Object cn "this"
     let params =
           thisParam : case mrp of
             Nothing -> pl
@@ -488,31 +487,31 @@ instance ContextGeneratable ClassID MethodDeclaration where
     return $ [Jump newPrefix] ++ concat subProcedureCommands ++ stackMemoryAllocationCommands ++ methodCommands ++ returnCommands
     where
       updateClassTableWithNewMethod :: ClassID -> ProcEntry -> GeneratorAction ()
-      updateClassTableWithNewMethod id pe@(ProcEntry s _) = do
+      updateClassTableWithNewMethod cid' pe@(ProcEntry s _) = do
         ct <- use classtable
-        case lookup id ct of
+        case lookup cid' ct of
           Nothing -> throwE "BUG encountered: method has no corresponding class!"
-          Just ce@(ClassEntry cn ucid ft mt) -> case lookupOverridableMethod ct s mt of
+          Just (ClassEntry cn ucid ft mt) -> case lookupOverridableMethod ct s mt of
             -- If an overridable method doesn't exist yet, this method is new and can just be added with a new ID
-            Nothing -> classtable .= replaceClassInTable id (ClassEntry cn ucid ft ((length mt, pe) : mt)) ct
+            Nothing -> classtable .= replaceClassInTable cid' (ClassEntry cn ucid ft ((length mt, pe) : mt)) ct
             -- Otherwise, override the method from upper class with the same ID!
-            Just (mid, ProcEntry _ _) -> classtable .= replaceClassInTable id (ClassEntry cn ucid ft (replaceMethodInTable mid pe mt)) ct
+            Just (mid, ProcEntry _ _) -> classtable .= replaceClassInTable cid' (ClassEntry cn ucid ft (replaceMethodInTable mid pe mt)) ct
 
       replaceMethodInTable :: MethodID -> ProcEntry -> MethodTable -> MethodTable
-      replaceMethodInTable id pe mt = (id, pe) : filter ((/=) id . fst) mt
+      replaceMethodInTable mid pe mt = (mid, pe) : filter ((/=) mid . fst) mt
 
       lookupOverridableMethod :: ClassTable -> Signature -> MethodTable -> Maybe (MethodID, ProcEntry)
-      lookupOverridableMethod ct s [] = Nothing
-      lookupOverridableMethod ct s ((id, p@(ProcEntry s' a)) : mt) =
+      lookupOverridableMethod _  _ [] = Nothing
+      lookupOverridableMethod ct s ((mid, p@(ProcEntry s' _)) : mt) =
         if overridesSig ct s s'
-          then Just (id, p)
+          then Just (mid, p)
           else lookupOverridableMethod ct s mt
         where
-          overridesSig ct (Signature n ts rt) (Signature n' ts' rt') = n == n' && ts == ts' && overridesRet ct rt rt'
+          overridesSig ct' (Signature name ts rt) (Signature name' ts' rt') = name == name' && ts == ts' && overridesRet ct' rt rt'
           overridesRet _ Nothing Nothing = True
-          overridesRet _ Nothing (Just t) = False
-          overridesRet _ (Just t) Nothing = False
-          overridesRet ct (Just t) (Just t') = isSubtypeOf ct t t'
+          overridesRet _ Nothing (Just _) = False
+          overridesRet _ (Just _) Nothing = False
+          overridesRet ct' (Just t) (Just t') = isSubtypeOf ct' t t'
 
 instance ContextGeneratable ProcKind ProcedureDeclaration where
   contextGenerator kind (Procedure (ProcedureHeader n pl mrp ps) c) = do
@@ -562,7 +561,7 @@ instance ContextGeneratable ProcKind ProcedureDeclaration where
                 ct <- use classtable
                 case lookupClassByName s ct of
                   Nothing -> throwE "BUG encountered: initializer with invalid return type!"
-                  Just (id, ClassEntry _ _ ft _) -> return [AllocateHeap (length ft) id, StoreStack p]
+                  Just (cid, ClassEntry _ _ ft _) -> return [AllocateHeap (length ft) cid, StoreStack p]
       _ -> return []
     -- generate the commands
     procedureCommands <- contextGenerator PROCEDURE c
@@ -634,7 +633,7 @@ instance Generatable Call where
       Nothing -> throwE "type error: empty type in parameter hole!"
       Just ts -> case lookupClosestMatchingMethod ct st o m ts of
         Left e -> throwE e
-        Right (id, ProcEntry _ _) -> return id
+        Right (mid, ProcEntry _ _) -> return mid
     -- generate parameter loading commands and method call
     -- first, lookup the object position
     objPos <- case lookupSymbol st o of
@@ -657,7 +656,7 @@ instance Typeable Call where
   typifier (SymbolReference (FieldReference o f)) = do
     -- lookup object
     st <- view symtablet
-    (objType, objPos) <- case lookupSymbol st o of
+    (objType, _) <- case lookupSymbol st o of
       Nothing -> throwE $ "undefined symbol " ++ o
       Just (SymbolEntry _ INT _) -> throwE "trying to access field of a non-object"
       Just (SymbolEntry _ (OBJ t) p) -> return (t, p)
@@ -710,7 +709,7 @@ instance ContextGeneratable CommandContext SyntaxTree.Command where
             updateSymbolTableDependingOnCommandContext ctxt st
             return $ eCommands ++ [StoreStack symPos]
           else throwDiagnosticError $ "variable " ++ n ++ " was assigned an expression with incompatible type"
-  contextGenerator ctxt (Assignment (FieldReference o f) e) = do
+  contextGenerator _ (Assignment (FieldReference o f) e) = do
     -- lookup object
     st <- use symtable
     (objType, objPos) <- case lookupSymbol st o of
@@ -773,12 +772,12 @@ instance ContextGeneratable CommandContext SyntaxTree.Command where
     updateSymbolTableDependingOnCommandContext ctxt st
     -- An object declaration doesn't allocate memory, the address will be invalid until the object is initialized
     return [PushInt (-1), StoreStack pos]
-  contextGenerator ctxt (CallCommand call) = do
+  contextGenerator _ (CallCommand call) = do
     t <- typify call
     case t of
       Nothing -> generator call
       Just _ -> throwE "type error: we can only fit empty return values here"
-  contextGenerator ctxt (SyntaxTree.Read n) = do
+  contextGenerator _ (SyntaxTree.Read n) = do
     st <- use symtable
     pos <- case lookupSymbol st n of
       Nothing -> throwE $ "undefined symbol " ++ n
@@ -800,7 +799,7 @@ instance ContextGeneratable CommandContext SyntaxTree.Command where
     symtable .= st
     p <- use prefixlength
     return $ condCommands ++ [JumpIfFalse p] ++ bodyCommands
-  contextGenerator ctxt (While cond cmd) = do
+  contextGenerator _ (While cond cmd) = do
     st <- use symtable
     oldPrefix <- use prefixlength
     condCommands <- generator cond
@@ -810,7 +809,7 @@ instance ContextGeneratable CommandContext SyntaxTree.Command where
     symtable .= st
     newPrefix <- use prefixlength
     return $ condCommands ++ [JumpIfFalse newPrefix] ++ bodyCommands ++ [Jump oldPrefix]
-  contextGenerator ctxt (SyntaxTree.PrintI e) = do
+  contextGenerator _ (SyntaxTree.PrintI e) = do
     t <- typify e
     case t of
       Nothing -> throwE "type error: we can only fit integer values here"
@@ -819,13 +818,13 @@ instance ContextGeneratable CommandContext SyntaxTree.Command where
         eCmds <- generator e
         prefixlength += 1
         return $ eCmds ++ [PrintInt]
-  contextGenerator ctxt (PrintS msg) = do
+  contextGenerator _ (PrintS msg) = do
     prefixlength += 1
     return [PrintStr msg]
-  contextGenerator ctxt (PrintLnS msg) = do
+  contextGenerator _ (PrintLnS msg) = do
     prefixlength += 1
     return [PrintStrLn msg]
-  contextGenerator ctxt Error = do
+  contextGenerator _ Error = do
     prefixlength += 1
     return [Halt]
 
@@ -851,7 +850,7 @@ instance Generatable Condition where
     t' <- typify e'
     case t of
       Nothing -> throwE "type error: conditions can only be evaluated on integers"
-      Just ty -> when (t /= t') $ throwE "type error: conditions can only be evaluated on integers"
+      Just ty -> when (ty /= INT || t /= t') $ throwE "type error: conditions can only be evaluated on integers"
     eCommands <- generator e
     e'Commands <- generator e'
     let newCmds = eCommands ++ e'Commands ++ [CombineBinary $ conv r]
@@ -869,7 +868,7 @@ instance Generatable Condition where
 
 -- this generator expects the expression to be well-typed which needs to be ensured before calling
 instance Generatable Expression where
-  generator e@(Expression ((s, t) :| sts)) = do
+  generator (Expression ((s, t) :| sts)) = do
     -- If there is a plus, we just generate the factor (works also if s has type OBJ _)
     -- If there is a minus, we generate PushInt 0 before and Command Minus after the factor, calculating its negated value
     firstFactorCommands <- case s of
@@ -882,16 +881,16 @@ instance Generatable Expression where
     tsCommands <- traverse stGenerator sts
     return $ firstFactorCommands ++ concat tsCommands
     where
-      stGenerator (s, t) = do
-        tCommands <- generator t
+      stGenerator (s', t') = do
+        tCommands <- generator t'
         prefixlength += 1
-        let signCommand = [CombineBinary $ conv s]
+        let signCommand = [CombineBinary $ conv s']
         return $ tCommands ++ signCommand
       conv SyntaxTree.Plus = Command.Plus
       conv SyntaxTree.Minus = Command.Minus
 
 instance Typeable Expression where
-  typifier (Expression ((s, t) :| ts)) = do
+  typifier (Expression ((_, t) :| ts)) = do
     ttype <- typifier t
     if null ts
       then return ttype
@@ -908,8 +907,8 @@ instance Generatable Term where
     ofsCommands <- traverse ofsGenerator ofs
     return $ fCommands ++ concat ofsCommands
     where
-      ofsGenerator (o, f) = do
-        fCommands <- generator f
+      ofsGenerator (o, f') = do
+        fCommands <- generator f'
         prefixlength += 1
         let oCommand = [CombineBinary $ conv o]
         return $ fCommands ++ oCommand
@@ -941,7 +940,7 @@ instance Typeable Factor where
   typifier (CallFactor c) = typifier c
   -- a class instantiation unsurprisingly has the same type as the corresponding initializer/constructor
   typifier (ClassInstantiation cn apl) = typifier (Call (NameReference $ "INIT_" ++ cn) apl)
-  typifier (Integer n) = return $ Just INT
+  typifier (Integer _) = return $ Just INT
   typifier (CompositeFactor e) = typifier e
 
 {--}

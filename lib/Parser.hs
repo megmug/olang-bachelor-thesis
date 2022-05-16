@@ -1,9 +1,4 @@
 {-# LANGUAGE FlexibleInstances #-}
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-
-{-# HLINT ignore "Use $>" #-}
-{-# HLINT ignore "Use lambda-case" #-}
-{-# HLINT ignore "Use <$" #-}
 
 module Parser where
 
@@ -36,13 +31,16 @@ import Text.Parsec.Error (ParseError)
 import Text.Parsec.Pos (SourcePos)
 import Text.Parsec.Prim
   ( Parsec,
-    getInput,
     many,
     parse,
     tokenPrim,
     (<|>),
   )
 import Token (Token (..), TokenPos)
+
+{-# ANN module ("hlint: ignore Use $>") #-}
+{-# ANN module ("hlint: ignore Use <$") #-}
+{-# ANN module ("hlint: ignore Use lambda-case") #-}
 
 -- a parser generates some output by consuming a list of tokens + positions
 type Parser a = Parsec [TokenPos] () a
@@ -63,9 +61,8 @@ program = parser
 instance Parseable Program where
   parser = do
     mcps <- using
-    accept DO
+    _ <- accept DO
     cmd <- command
-    r <- getInput
     eof
     return
       ( case mcps of
@@ -248,14 +245,6 @@ instance Parseable Factor where
       <|> (SyntaxTree.Integer <$> acceptInteger)
       <|> (CompositeFactor <$> (accept OpenRoundBracket *> expression <* accept CloseRoundBracket))
 
-operator :: Parser Operator
-operator = parser
-
-instance Parseable Operator where
-  parser =
-    (accept (:*) *> pure Times)
-      <|> (accept (:/) *> pure Divide)
-
 sign :: Parser Sign
 sign = parser
 
@@ -263,6 +252,14 @@ instance Parseable Sign where
   parser =
     (accept (:-) *> pure Minus)
       <|> (accept (:+) *> pure Plus)
+
+operator :: Parser Operator
+operator = parser
+
+instance Parseable Operator where
+  parser =
+    (accept (:*) *> pure Times)
+      <|> (accept (:/) *> pure Divide)
 
 {- Primitive helper functions
  - Most of these are only needed because we don't have a standard character parser, for which parsec is optimized

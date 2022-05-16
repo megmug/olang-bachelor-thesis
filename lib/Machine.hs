@@ -1,5 +1,4 @@
-{-# HLINT ignore "Avoid lambda" #-}
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# OPTIONS_GHC -Wno-type-defaults #-}
 
 module Machine where
 
@@ -19,6 +18,8 @@ import Control.Monad.Trans.Except (Except, runExcept, throwE)
 import Control.Monad.Trans.State (StateT (runStateT), get)
 import qualified Data.IntMap as M
 import qualified Data.Vector as V
+
+{-# ANN module ("hlint: ignore Avoid lambda") #-}
 
 {- Type definitions -}
 data Machine
@@ -97,7 +98,6 @@ instream f (Machine c s i pc b o h mts input) = (\input' -> Machine c s i pc b o
 {- Commonly used state computations -}
 throwErr :: String -> Computation a
 throwErr e = do
-  m <- get
   lift $ throwE e
 
 throwDiagnosticErr :: String -> Computation a
@@ -186,10 +186,10 @@ instance Show Machine where
 customShow :: Code -> String
 customShow cs = "[" ++ showElements 0 cs ++ "]"
   where
-    showElements i cs
-      | V.null cs = ""
-      | i /= 0 = ", " ++ show i ++ ": " ++ show (V.head cs) ++ showElements (i + 1) (V.tail cs)
-      | otherwise = show i ++ ": " ++ show (V.head cs) ++ showElements (i + 1) (V.tail cs)
+    showElements i cs'
+      | V.null cs' = ""
+      | i /= 0 = ", " ++ show i ++ ": " ++ show (V.head cs') ++ showElements (i + 1) (V.tail cs')
+      | otherwise = show i ++ ": " ++ show (V.head cs') ++ showElements (i + 1) (V.tail cs')
 
 isIndexForVector :: Int -> V.Vector a -> Bool
 isIndexForVector i v = 0 <= i && i < V.length v
@@ -272,7 +272,7 @@ step = do
       stack .= V.snoc sOld n
       loadNextInstruction
       return Nothing
-    LoadHeap i -> do
+    LoadHeap a -> do
       sOld <- use stack
       if null sOld
         then throwErr "LoadHeap: stack address out of range"
@@ -282,14 +282,14 @@ step = do
           case M.lookup heapAddr h of
             Nothing -> throwErr "LoadHeap: heap address out of range!"
             Just (HeapEntry _ _ fs) -> do
-              if isIndexForVector i fs
+              if isIndexForVector a fs
                 then do
-                  let val = fs V.! i
+                  let val = fs V.! a
                   stack .= V.snoc (V.init sOld) val
                   loadNextInstruction
                   return Nothing
                 else throwErr "LoadHeap: referenced a non-existing field!"
-    StoreHeap i -> do
+    StoreHeap hi -> do
       sOld <- use stack
       if V.length sOld < 2
         then throwErr "StoreHeap: stack address out of range"
@@ -300,22 +300,22 @@ step = do
           case M.lookup heapAddr h of
             Nothing -> throwErr "StoreHeap: heap address out of range"
             Just (HeapEntry cid refcounter fs) -> do
-              if isIndexForVector i fs
+              if isIndexForVector hi fs
                 then do
-                  let fsNew = V.update fs (V.fromList [(i, val)])
+                  let fsNew = V.update fs (V.fromList [(hi, val)])
                   let heapEntryNew = HeapEntry cid refcounter fsNew
                   heap .= M.adjust (const heapEntryNew) heapAddr h
                   stack .= V.init (V.init sOld)
                   loadNextInstruction
                   return Nothing
                 else throwErr "StoreHeap: referenced a non-existing field"
-    AllocateHeap n id -> do
+    AllocateHeap n cid -> do
       mt <- use mtables
-      case lookup id mt of
+      case lookup cid mt of
         Nothing -> throwErr "AllocateHeap: referenced a non-existing class"
         Just _ -> do
           let fieldsNew = V.fromList (replicate n 0)
-          let heapEntryNew = HeapEntry id 0 fieldsNew
+          let heapEntryNew = HeapEntry cid 0 fieldsNew
           key <- use ocounter
           h <- use heap
           heap .= M.insert key heapEntryNew h
@@ -332,12 +332,12 @@ step = do
       modifyRefCounter (+ (-1))
       loadNextInstruction
       return Nothing
-    CreateMethodTable id methods -> do
+    CreateMethodTable cid methods -> do
       mtsOld <- use mtables
-      case lookup id mtsOld of
+      case lookup cid mtsOld of
         Just _ -> throwErr "CreateMethodTable: method table already exists"
         Nothing -> do
-          mtables .= (id, methods) : mtsOld
+          mtables .= (cid, methods) : mtsOld
           loadNextInstruction
           return Nothing
     Jump a -> do
@@ -362,13 +362,12 @@ step = do
       bregister .= V.length start
       jumpTo a
       return Nothing
-    CallMethod i n -> do
+    CallMethod i' n -> do
       sOld <- use stack
       when (V.length sOld < n + 1) $ throwErr "CallMethod: stack address out of range"
       let numCellsBeforeParams = V.length sOld - (n + 1)
           (start, params) = V.splitAt numCellsBeforeParams sOld
           objAddr = fromInteger $ V.head params
-          normalParams = V.tail params
       h <- use heap
       a <- case M.lookup objAddr h of
         Nothing -> throwErr "CallMethod: heap address out of range"
@@ -376,7 +375,7 @@ step = do
           mts <- use mtables
           case lookup cid mts of
             Nothing -> throwErr "CallMethod: referenced invalid class"
-            Just mt -> case lookup i mt of
+            Just mt -> case lookup i' mt of
               Nothing -> throwErr "CallMethod: referenced invalid metthod"
               Just a -> return a
       prog <- use code
@@ -460,18 +459,18 @@ runTest cs s = case createMachineWithInput cs s of
   Nothing -> Left "invalid machine code"
   Just m -> runAccumulatingOutput m ""
   where
-    runAccumulatingOutput m s = case stepTest m of
+    runAccumulatingOutput m s' = case stepTest m of
       Left str -> Left str
       Right (out, m') ->
         if isHalted m'
-          then Right $ s ++ out
-          else runAccumulatingOutput m' (s ++ out)
+          then Right $ s' ++ out
+          else runAccumulatingOutput m' (s' ++ out)
 
 stepTest :: Machine -> Either String (String, Machine)
 stepTest m = case runExcept $ runStateT step m of
   Left e -> error e
-  Right (Nothing, m) -> return ("", m)
-  Right (Just s, m) -> return (s, m)
+  Right (Nothing, m') -> return ("", m')
+  Right (Just s, m') -> return (s, m')
 
 runDefaultIO :: [Command] -> IO ()
 runDefaultIO cs = do
@@ -505,7 +504,7 @@ runInteractiveIO cs = do
         else do
           print m'
           putStrLn "Press enter for next machine step"
-          getLine
+          _ <- getLine
           stepInteractivelyUntilHalted m'
 
 stepIO :: Machine -> IO Machine
@@ -516,9 +515,9 @@ stepIO m = do
       let m' = set instream [l] m
       return m'
     Left e -> error e
-    Right (Nothing, m) -> return m
-    Right (Just s, m) -> do
+    Right (Nothing, m') -> return m'
+    Right (Just s, m') -> do
       putStr s
-      return m
+      return m'
 
 {--}

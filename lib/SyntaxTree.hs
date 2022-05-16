@@ -1,9 +1,9 @@
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-
-{-# HLINT ignore "Use newtype instead of data" #-}
 module SyntaxTree where
 
 import Data.List.NonEmpty (NonEmpty)
+
+{-# ANN module ("hlint: ignore Use lambda-case") #-}
+{-# ANN module ("hlint: ignore Use newtype instead of data") #-}
 
 {- There is a type for all important nonterminals in the grammar
  - The grammar is not represented 1:1, rather an optimized version that is stripped of unnecessary details

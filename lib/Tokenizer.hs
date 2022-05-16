@@ -1,7 +1,3 @@
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-
-{-# HLINT ignore "Use $>" #-}
-
 module Tokenizer (tokenize) where
 
 import Text.Parsec
@@ -83,8 +79,10 @@ unittokenizers =
       ("}", CloseCurlyBracket)
     ]
 
+lowerchar :: [Char]
 lowerchar = ['a' .. 'z']
 
+upperchar :: [Char]
 upperchar = ['A' .. 'Z']
 
 -- here we define a few tokenizers for parsing non-atomic tokens
@@ -124,7 +122,7 @@ anyIgnored = choice [space, endOfLine, tab]
 tokenizer :: Tokenizer
 tokenizer = do
   ts <- many $ try (many anyIgnored *> someToken)
-  many anyIgnored
+  _ <- many anyIgnored
   eof
   return ts
 
