@@ -501,7 +501,7 @@ instance ContextGeneratable ClassID MethodDeclaration where
       replaceMethodInTable mid pe mt = (mid, pe) : filter ((/=) mid . fst) mt
 
       lookupOverridableMethod :: ClassTable -> Signature -> MethodTable -> Maybe (MethodID, ProcEntry)
-      lookupOverridableMethod _  _ [] = Nothing
+      lookupOverridableMethod _ _ [] = Nothing
       lookupOverridableMethod ct s ((mid, p@(ProcEntry s' _)) : mt) =
         if overridesSig ct s s'
           then Just (mid, p)
