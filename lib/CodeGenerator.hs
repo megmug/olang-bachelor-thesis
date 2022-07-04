@@ -381,7 +381,7 @@ instance Generatable Program where
     prefixlength += length mainStackMemoryAllocationCommands
     mainProgram <- contextGenerator MAIN c
     ct <- use classtable
-    let programCommands = [Reset] ++ getMTables ct ++ concat classCommands ++ concat procCommands ++ mainStackMemoryAllocationCommands ++ mainProgram ++ [PrintStr "\nProgram terminated successfully.\n", Halt]
+    let programCommands = [Reset] ++ getMTables ct ++ concat classCommands ++ concat procCommands ++ mainStackMemoryAllocationCommands ++ mainProgram ++ [Halt]
     {- set state accordingly (not strictly necessary, but for sake of consistency with other generators, we do it none the less) -}
     prefixlength .= length programCommands
     symtable .= []
