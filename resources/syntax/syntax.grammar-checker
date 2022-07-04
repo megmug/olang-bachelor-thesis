@@ -94,11 +94,11 @@ Term''                      -> times
                              | divide .
 Factor                      -> Call
                              | classname ActualParameterList
-                             | number
+                             | integer
                              | openroundbracket Expression closeroundbracket .
 
-/*  SymbolName: lowerCamelCase alpha string w/o spaces
- *  Number: numeric string w/o spaces
- *  String: any string, enclosed in " "
- *  ClassName: CamelCase alpha string w/o spaces
+/*  symbolname: lowerCamelCase alpha string w/o spaces
+ *  integer: sequence of digits
+ *  string: any string, enclosed in " "
+ *  classname: CamelCase alpha string w/o spaces
  */

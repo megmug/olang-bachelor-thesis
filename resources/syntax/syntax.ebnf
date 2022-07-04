@@ -36,11 +36,11 @@ Expression                 ::= ('+' | '-')? Term (('+' | '-') Term)*
 Term                       ::= Factor (( '*' | '/' ) Factor)*
 Factor                     ::= Call
                              | ClassName ActualParameterList  /* Class Instantiation */
-                             | Number
+                             | Integer
                              | '(' Expression ')'
 
 /*  SymbolName: lowerCamelCase alpha string w/o spaces
- *  Number: numeric string w/o spaces
+ *  Integer: sequence of digits
  *  String: any string, enclosed in " "
  *  ClassName: CamelCase alpha string w/o spaces
  */
