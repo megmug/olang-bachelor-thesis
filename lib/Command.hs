@@ -55,20 +55,6 @@ data Command
                 - Address of newly created heap frame is pushed onto the stack
     -}
     AllocateHeap Int ClassID
-  | {- IncrementRefCounter: Declare that new reference to heap object (called a) is created on the stack
-       Requires: Old top of stack value (a) represents valid heap address
-       Ensures: - Reference counter of heap frame a is incremented
-                - a is popped from the stack
-    -}
-    IncrementRefCounter
-  | {- DecrementRefCounter: Declare that one reference to heap object (called a)  was thrown away
-       Requires: Old top of stack value (a) represents valid heap address
-       Ensures: - Reference counter of heap frame a is decremented
-                - a is popped from the stack
-                - IFF a's reference counter is 0, heap frame a may be deleted
-                - IF a's reference counter is negative, the machine may halt with an error
-    -}
-    DecrementRefCounter
   | {- CreateMethodTable id [(0, a0), (1, a1), ..., (n, an)] creates a method table for class with ID id that notes method 0 at code address a0, method 1 at code address a1 etc.
        Requires: Method table for class ID id does not yet exist
        Ensures: - Method table with specified class ID id is created

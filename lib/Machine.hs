@@ -49,7 +49,7 @@ type ObjectCounter = Int
 
 type Heap = M.IntMap HeapEntry
 
-data HeapEntry = HeapEntry ClassID RefCounter (V.Vector Integer) deriving (Eq, Show)
+data HeapEntry = HeapEntry ClassID (V.Vector Integer) deriving (Eq, Show)
 
 type RefCounter = Int
 
@@ -118,21 +118,6 @@ loadNextInstruction = do
       iregister .= prog V.! pc
       programcounter += 1
     else throwErr "program counter out of range!"
-
-modifyRefCounter :: (Int -> Int) -> Computation ()
-modifyRefCounter f = do
-  sOld <- use stack
-  if null sOld
-    then throwErr "stack address out of range"
-    else do
-      let heapAddr = fromInteger $ V.last sOld
-      h <- use heap
-      case M.lookup heapAddr h of
-        Nothing -> throwErr "heap address out of range!"
-        Just (HeapEntry cid refcounter fs) -> do
-          let newHeapEntry = HeapEntry cid (f refcounter) fs
-          heap .= M.adjust (const newHeapEntry) heapAddr h
-          stack .= V.init sOld
 
 jumpTo :: CodeAddress -> Computation ()
 jumpTo a = do
@@ -281,7 +266,7 @@ step = do
           h <- use heap
           case M.lookup heapAddr h of
             Nothing -> throwErr "LoadHeap: heap address out of range!"
-            Just (HeapEntry _ _ fs) -> do
+            Just (HeapEntry _ fs) -> do
               if isIndexForVector a fs
                 then do
                   let val = fs V.! a
@@ -299,11 +284,11 @@ step = do
           h <- use heap
           case M.lookup heapAddr h of
             Nothing -> throwErr "StoreHeap: heap address out of range"
-            Just (HeapEntry cid refcounter fs) -> do
+            Just (HeapEntry cid fs) -> do
               if isIndexForVector hi fs
                 then do
                   let fsNew = V.update fs (V.fromList [(hi, val)])
-                  let heapEntryNew = HeapEntry cid refcounter fsNew
+                  let heapEntryNew = HeapEntry cid fsNew
                   heap .= M.adjust (const heapEntryNew) heapAddr h
                   stack .= V.init (V.init sOld)
                   loadNextInstruction
@@ -315,7 +300,7 @@ step = do
         Nothing -> throwErr "AllocateHeap: referenced a non-existing class"
         Just _ -> do
           let fieldsNew = V.fromList (replicate n 0)
-          let heapEntryNew = HeapEntry cid 0 fieldsNew
+          let heapEntryNew = HeapEntry cid fieldsNew
           key <- use ocounter
           h <- use heap
           heap .= M.insert key heapEntryNew h
@@ -324,14 +309,6 @@ step = do
           stack .= V.snoc sOld (toInteger key)
           loadNextInstruction
           return Nothing
-    IncrementRefCounter -> do
-      modifyRefCounter (+ 1)
-      loadNextInstruction
-      return Nothing
-    DecrementRefCounter -> do
-      modifyRefCounter (+ (-1))
-      loadNextInstruction
-      return Nothing
     CreateMethodTable cid methods -> do
       mtsOld <- use mtables
       case lookup cid mtsOld of
@@ -371,7 +348,7 @@ step = do
       h <- use heap
       a <- case M.lookup objAddr h of
         Nothing -> throwErr "CallMethod: heap address out of range"
-        Just (HeapEntry cid _ _) -> do
+        Just (HeapEntry cid _) -> do
           mts <- use mtables
           case lookup cid mts of
             Nothing -> throwErr "CallMethod: referenced invalid class"
@@ -454,6 +431,28 @@ run = runDefaultIO
 runDebug :: [Command] -> IO ()
 runDebug = runInteractiveIO
 
+runTrace :: [Command] -> IO ()
+runTrace = runTraceIO
+
+stepTest :: Machine -> Either String (String, Machine)
+stepTest m = case runExcept $ runStateT step m of
+  Left e -> error e
+  Right (Nothing, m') -> return ("", m')
+  Right (Just s, m') -> return (s, m')
+
+stepIO :: Machine -> IO Machine
+stepIO m = do
+  case runExcept $ runStateT step m of
+    Left "CONTROL: need input" -> do
+      l <- getLine
+      let m' = set instream [l] m
+      return m'
+    Left e -> error e
+    Right (Nothing, m') -> return m'
+    Right (Just s, m') -> do
+      putStr s
+      return m'
+
 runTest :: [Command] -> InputStream -> Either String String
 runTest cs s = case createMachineWithInput cs s of
   Nothing -> Left "invalid machine code"
@@ -465,12 +464,6 @@ runTest cs s = case createMachineWithInput cs s of
         if isHalted m'
           then Right $ s' ++ out
           else runAccumulatingOutput m' (s' ++ out)
-
-stepTest :: Machine -> Either String (String, Machine)
-stepTest m = case runExcept $ runStateT step m of
-  Left e -> error e
-  Right (Nothing, m') -> return ("", m')
-  Right (Just s, m') -> return (s, m')
 
 runDefaultIO :: [Command] -> IO ()
 runDefaultIO cs = do
@@ -485,6 +478,20 @@ runDefaultIO cs = do
       if isHalted m'
         then return ()
         else stepIOUntilHalted m'
+
+runTraceIO :: [Command] -> IO ()
+runTraceIO cs = do
+  m <- case createMachine cs of
+    Nothing -> error "invalid machine code"
+    Just m -> return m
+  stepIOWithTraceUntilHalted m
+  where
+    stepIOWithTraceUntilHalted m = do
+      print m
+      m' <- stepIO m
+      if isHalted m'
+        then return ()
+        else stepIOWithTraceUntilHalted m'
 
 runInteractiveIO :: [Command] -> IO ()
 runInteractiveIO cs = do
@@ -506,18 +513,5 @@ runInteractiveIO cs = do
           putStrLn "Press enter for next machine step"
           _ <- getLine
           stepInteractivelyUntilHalted m'
-
-stepIO :: Machine -> IO Machine
-stepIO m = do
-  case runExcept $ runStateT step m of
-    Left "CONTROL: need input" -> do
-      l <- getLine
-      let m' = set instream [l] m
-      return m'
-    Left e -> error e
-    Right (Nothing, m') -> return m'
-    Right (Just s, m') -> do
-      putStr s
-      return m'
 
 {--}

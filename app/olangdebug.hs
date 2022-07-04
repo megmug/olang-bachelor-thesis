@@ -1,5 +1,5 @@
 import CodeGenerator ( Generatable(generate) )
-import Machine ( runDebug )
+import Machine ( runTrace )
 import Parser ( ParseResult, Parseable(parse) )
 import SyntaxTree ( Program )
 import System.Environment ( getArgs )
@@ -11,7 +11,6 @@ main = do
   hSetBuffering stdout NoBuffering
   args <- getArgs
   input <- readFile (head args)
-  putStrLn "olang-debug"
   case tokenize input of
     Left e -> putStrLn $ "Lexical error: " ++ show e
     Right t -> do
@@ -25,5 +24,5 @@ main = do
             Left e -> putStrLn $ "Compilation error: " ++ e
             Right cmds -> do
               putStrLn $ "Successful compilation.\nResult: " ++ show cmds
-              runDebug cmds
+              runTrace cmds
   putStrLn "Program terminated."
