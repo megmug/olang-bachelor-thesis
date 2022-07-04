@@ -1,0 +1,9 @@
+USING [
+    CLASS Intbox(INT i)
+    FIELDS INT i
+    INIT { this.i := i }
+] DO {
+    OBJ Intbox ib
+    ib := Intbox(1)
+    PRINTI ib.i
+}

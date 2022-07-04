@@ -1,0 +1,11 @@
+DO {
+    PRINTLNS "This program calculates the sum of two integers a + b."
+    INT a
+    INT b
+    PRINTS "Please enter a: "
+    READ a
+    PRINTS "Please enter b: "
+    READ b
+    PRINTS "a + b = "
+    PRINTI a + b
+}

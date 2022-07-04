@@ -1,0 +1,25 @@
+USING [
+    CLASS Intbox(INT i)
+    FIELDS INT i
+    INIT { this.i := i }
+
+    PROCEDURE setZero(OBJ Intbox b) {
+        b.i := 0
+    }
+
+    PROCEDURE setZero(INT i) {
+        i := 0
+    }
+] DO {
+    OBJ Intbox ib
+    ib := Intbox(1)
+    CALL setZero(ib)
+    PRINTI ib.i
+    PRINTLNS ""
+
+    INT i
+    i := 1
+    CALL setZero(i)
+    PRINTI i
+    PRINTLNS ""
+}

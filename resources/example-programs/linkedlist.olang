@@ -1,6 +1,9 @@
 USING [
     CLASS ListInterface()
-    INIT { PRINTS "" }
+    INIT {
+        PRINTLNS "This class represents an interface and must not be instantiated!"
+        ERROR
+    }
     [
         METHOD print() {
             PRINTLNS "I am a generic list"
@@ -14,16 +17,16 @@ USING [
     CLASS List(INT firstel)
     SUBCLASSOF ListInterface
     FIELDS INT element
-           INT hasnext
+           INT hasNext
            OBJ ListInterface next
     INIT {
         this.element := firstel
-        this.hasnext := 0
+        this.hasNext := 0
     }
     [
         METHOD print() {
             PRINTI this.element
-            IF this.hasnext = 1 THEN {
+            IF this.hasNext = 1 THEN {
                 PRINTS " -> "
                 OBJ ListInterface mynext
                 mynext := this.next
@@ -32,14 +35,14 @@ USING [
         }
 
         METHOD insert(INT newel) RETURNS OBJ List newhead {
-            IF this.hasnext = 1 THEN {
+            IF this.hasNext = 1 THEN {
                 OBJ ListInterface next
                 next := this.next
                 this.next := next.insert(newel)
                 newhead := this
             }
-            IF this.hasnext = 0 THEN {
-                this.hasnext := 1
+            IF this.hasNext = 0 THEN {
+                this.hasNext := 1
                 this.next := List(newel)
                 newhead := this
             } 
@@ -58,9 +61,9 @@ USING [
             PRINTLNS ""
         }
 
-        METHOD insert(INT newel) RETURNS OBJ List newhead {
-            newhead := List(this.element)
-            newhead := newhead.insert(newel)
+        METHOD insert(INT newel) RETURNS OBJ List newHead {
+            newHead := List(this.element)
+            newHead := newHead.insert(newel)
         }
     ]
 ] DO {

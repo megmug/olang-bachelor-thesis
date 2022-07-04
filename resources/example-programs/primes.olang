@@ -1,20 +1,17 @@
-USING [
-    PROCEDURE isprime(INT n) RETURNS INT isprime {
+DO {
+    PRINTLNS "I will now begin listing all primes"
+    INT n
+    n := 2
+    WHILE n > 0 DO {
         INT m
+        INT isprime
         m := 2
         isprime := 1
         WHILE m < n DO {
                 IF (n / m) * m = n THEN isprime := 0
                 m := m + 1
         }
-    }
-]
-DO {
-    PRINTLNS "I will now begin listing all the primes"
-    INT n
-    n := 2
-    WHILE n > 0 DO {
-        IF isprime(n) = 1 THEN {
+        IF isprime = 1 THEN {
             PRINTI n
             PRINTLNS ""
         }

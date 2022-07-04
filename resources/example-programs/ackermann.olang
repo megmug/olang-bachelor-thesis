@@ -1,24 +1,30 @@
 USING [
- PROCEDURE ack(INT n, INT m) RETURNS INT a {
-   IF n < 0 THEN a := -1
-   IF m < 0 THEN a := -1
-   IF NOT n < 0 THEN
-       IF NOT m < 0 THEN {
-           IF n = 0 THEN a := m + 1
-           IF NOT n = 0 THEN {
-               IF m = 0 THEN a := ack(n - 1, 1)
-               IF NOT m = 0 THEN a := ack(n - 1, ack(n, m - 1))
-           }
-       }
- }
-]
-DO {
-  PRINTLNS "This program calculates the ackermann function a(n, m)."
+  PROCEDURE ack(INT n, INT m) RETURNS INT a {
+    IF n < 0 THEN {
+      PRINTLNS "ERROR: First parameter is negative!"
+      ERROR
+    }
+    IF m < 0 THEN {
+      PRINTLNS "ERROR: Second parameter is negative!"
+      ERROR
+    }
+    IF NOT n < 0 THEN
+      IF NOT m < 0 THEN {
+        IF n = 0 THEN a := m + 1
+        IF NOT n = 0 THEN {
+          IF m = 0 THEN a := ack(n - 1, 1)
+          IF NOT m = 0 THEN a := ack(n - 1, ack(n, m - 1))
+        }
+      }
+  }
+] DO {
+  PRINTLNS "This program calculates the ackermann function ack(n, m)."
   INT n
   INT m
-  PRINTS "Please enter an integer n: "
+  PRINTS "Please enter a natural number n: "
   READ n
-  PRINTS "Please enter an integer m: "
+  PRINTS "Please enter a natural number m: "
   READ m
-  PRINTS "Result: "
-  PRINTI ack(n, m) }
+  PRINTS "ack(n, m) = "
+  PRINTI ack(n, m)
+}
