@@ -1,11 +1,11 @@
 USING [
   PROCEDURE ack(INT n, INT m) RETURNS INT a {
     IF n < 0 THEN {
-      PRINTLNS "ERROR: First parameter is negative!"
+      PRINTLNS "ERROR: n is not a natural number!"
       ERROR
     }
     IF m < 0 THEN {
-      PRINTLNS "ERROR: Second parameter is negative!"
+      PRINTLNS "ERROR: m is not a natural number!"
       ERROR
     }
     IF NOT n < 0 THEN

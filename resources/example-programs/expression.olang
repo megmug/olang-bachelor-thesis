@@ -1,0 +1,245 @@
+USING [
+    CLASS Expression()
+    INIT {
+        PRINTLNS "ERROR: This is an interface"
+        ERROR
+    }
+    [
+        METHOD evaluate() RETURNS INT res {
+            PRINTLNS "ERROR: This is an interface"
+            ERROR
+        }
+
+        METHOD print() {
+            PRINTLNS "ERROR: This is an interface"
+            ERROR
+        }
+    ]
+
+    CLASS UnaryExpression()
+    SUBCLASSOF Expression
+    FIELDS OBJ Expression inner
+    INIT {
+        PRINTLNS "ERROR: This is an interface"
+        ERROR
+    }
+
+    CLASS BinaryExpression()
+    SUBCLASSOF Expression
+    FIELDS OBJ Expression left
+           OBJ Expression right
+    INIT {
+        PRINTLNS "ERROR: This is an interface"
+        ERROR
+    }
+
+    CLASS Atom(INT number)
+    SUBCLASSOF Expression
+    FIELDS INT number
+    INIT {
+        this.number := number
+    }
+    [
+        METHOD evaluate() RETURNS INT num {
+            num := this.number
+        }
+
+        METHOD print() {
+            PRINTI this.number
+        }
+    ]
+
+    CLASS Sum(OBJ Expression left, OBJ Expression right)
+    SUBCLASSOF BinaryExpression
+    INIT {
+        this.left := left
+        this.right := right
+    }
+    [
+        METHOD evaluate() RETURNS INT sum {
+            OBJ Expression left
+            OBJ Expression right
+            left := this.left
+            right := this.right
+            sum := left.evaluate() + right.evaluate()
+        }
+
+        METHOD print() {
+            OBJ Expression left
+            OBJ Expression right
+            left := this.left
+            right := this.right
+
+            PRINTS "("
+            CALL left.print()
+            PRINTS " + "
+            CALL right.print()
+            PRINTS ")"
+        }
+    ]
+
+    CLASS Difference(OBJ Expression left, OBJ Expression right)
+    SUBCLASSOF BinaryExpression
+    INIT {
+        this.left := left
+        this.right := right
+    }
+    [
+        METHOD evaluate() RETURNS INT diff {
+            OBJ Expression left
+            OBJ Expression right
+            left := this.left
+            right := this.right
+            diff := left.evaluate() - right.evaluate()
+        }
+
+        METHOD print() {
+            OBJ Expression left
+            OBJ Expression right
+            left := this.left
+            right := this.right
+
+            PRINTS "("
+            CALL left.print()
+            PRINTS " - "
+            CALL right.print()
+            PRINTS ")"
+        }
+    ]
+
+    CLASS Product(OBJ Expression left, OBJ Expression right)
+    SUBCLASSOF BinaryExpression
+    INIT {
+        this.left := left
+        this.right := right
+    }
+    [
+        METHOD evaluate() RETURNS INT product {
+            OBJ Expression left
+            OBJ Expression right
+            left := this.left
+            right := this.right
+            product := left.evaluate() * right.evaluate()
+        }
+
+        METHOD print() {
+            OBJ Expression left
+            OBJ Expression right
+            left := this.left
+            right := this.right
+
+            PRINTS "("
+            CALL left.print()
+            PRINTS " * "
+            CALL right.print()
+            PRINTS ")"
+        }
+    ]
+
+    CLASS Faculty(OBJ Expression inner)
+    SUBCLASSOF UnaryExpression
+    INIT {
+        this.inner := inner
+    }
+    [
+        METHOD evaluate()
+        RETURNS INT faculty
+        USING [
+            PROCEDURE faculty(INT num) RETURNS INT faculty {
+                IF num < 0 THEN {
+                    PRINTLNS "ERROR: Undefined factorial"
+                    ERROR
+                }
+                IF num = 0 THEN {
+                    faculty := 1
+                }
+                IF num > 0 THEN {
+                    faculty := num * faculty(num - 1)
+                }
+            }
+        ] {
+            OBJ Expression inner
+            inner := this.inner
+            INT num
+            num := inner.evaluate()
+            faculty := faculty(num)
+        }
+
+        METHOD print() {
+            OBJ Expression inner
+            inner := this.inner
+
+            PRINTS "("
+            CALL inner.print()
+            PRINTS "!)"
+        }
+    ]
+
+    CLASS Exponential(OBJ Expression base, OBJ Expression exponent)
+    SUBCLASSOF BinaryExpression
+    INIT {
+        this.left := base
+        this.right := exponent
+    }
+    [
+        METHOD evaluate()
+        RETURNS INT exp
+        USING [
+            PROCEDURE exp(INT base, INT exponent) RETURNS INT exp {
+                IF base < 0 THEN {
+                    PRINTLNS "ERROR: Illegal exponent base"
+                    ERROR
+                }
+                IF exponent < 0 THEN {
+                    PRINTLNS "ERROR: Illegal exponent"
+                    ERROR
+                }
+                IF base = 0 THEN {
+                    exp := 0
+                    IF exponent = 0 THEN {
+                        exp := 1
+                    }
+                }
+                IF base > 0 THEN {
+                    IF exponent = 0 THEN {
+                        exp := 1
+                    }
+                    IF exponent > 0 THEN {
+                        exp := base * exp(base, exponent - 1)
+                    }
+                }
+            }
+        ] {
+            OBJ Expression base
+            base := this.left
+            OBJ Expression exponent
+            exponent := this.right
+            INT b
+            b := base.evaluate()
+            INT e
+            e := exponent.evaluate()
+            exp := exp(b, e)
+        }
+
+        METHOD print() {
+            OBJ Expression left
+            OBJ Expression right
+            left := this.left
+            right := this.right
+
+            PRINTS "("
+            CALL left.print()
+            PRINTS "^"
+            CALL right.print()
+            PRINTS ")"
+        }
+    ]
+
+] DO {
+    OBJ Expression exp
+    exp := Exponential(Atom(3), Exponential(Atom(3), Atom(3)))
+
+    CALL exp.print()
+    PRINTS " = "
+    PRINTI exp.evaluate()
+}

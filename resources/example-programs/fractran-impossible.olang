@@ -1,0 +1,276 @@
+USING [
+    CLASS Rational (INT numerator, INT denominator) 
+    FIELDS INT numerator
+           INT denominator
+    INIT {
+        IF denominator = 0 THEN {
+            PRINTLNS "denominator cannot be zero!"
+            ERROR
+        }
+        this.numerator := numerator
+        this.denominator := denominator
+    }
+    [
+        METHOD getNumerator() RETURNS INT num {
+            num := this.numerator
+        }
+
+        METHOD getDenominator() RETURNS INT den {
+            den := this.denominator
+        }
+
+        METHOD multiply(INT factor) RETURNS OBJ Rational product {
+            product := Rational(factor * this.numerator, this.denominator)
+        }
+
+        METHOD isPositive() RETURNS INT isPositive {
+            isPositive := 1
+            IF this.numerator / this.denominator < 0 THEN isPositive := 0
+        }
+
+        METHOD isNatural() RETURNS INT isNatural {
+            isNatural := 0
+            IF this.isPositive() = 1 THEN {
+                IF (this.numerator / this.denominator) * this.denominator = this.numerator THEN isNatural := 1
+            }
+        }
+
+        METHOD print() {
+            PRINTI this.numerator
+            PRINTS " / "
+            PRINTI this.denominator
+        }
+    ]
+
+    CLASS RationalListInterface()
+    INIT {
+        PRINTLNS "This class represents an interface and must not be instantiated!"
+        ERROR
+    }
+    [
+        METHOD print() {
+            PRINTLNS "I am an abstract method"
+            ERROR
+        }
+
+        METHOD length() RETURNS INT length {
+            PRINTLNS "I am an abstract method"
+            ERROR
+        }
+
+        METHOD insert(OBJ Rational element) RETURNS OBJ RationalListInterface res {
+            PRINTLNS "I am an abstract method"
+            ERROR
+        }
+
+        METHOD get(INT index) RETURNS OBJ Rational res {
+            PRINTLNS "I am an abstract method"
+            ERROR
+        }
+    ]
+
+    CLASS RationalList(OBJ Rational head)
+    SUBCLASSOF RationalListInterface
+    FIELDS OBJ Rational element
+           OBJ RationalListInterface next
+    INIT {
+        this.element := head
+        this.next := RationalLeaf()
+    }
+    [
+        METHOD print() {
+            OBJ Rational el
+            el := this.element
+            CALL el.print()
+            PRINTS ", "
+            OBJ RationalListInterface next
+            next := this.next
+            CALL next.print()
+        }
+
+        METHOD length() RETURNS INT len {
+            OBJ RationalListInterface next
+            next := this.next
+            len := 1 + next.length()
+        }
+
+        METHOD insert(OBJ Rational element) RETURNS OBJ RationalList newHead {
+            OBJ RationalListInterface next
+            next := this.next
+            this.next := next.insert(element)
+
+            newHead := this
+        }
+
+        METHOD get(INT i) RETURNS OBJ Rational res {
+            IF i < 0 THEN {
+                PRINTLNS "Index out of range!"
+                ERROR
+            }
+            IF i = 0 THEN {
+                res := this.element
+            }
+            IF i > 0 THEN {
+                OBJ RationalListInterface next
+                next := this.next
+                res := next.get(i - 1)
+            }
+        }
+    ]
+
+    CLASS RationalLeaf()
+    SUBCLASSOF RationalListInterface
+    INIT { PRINTS "" }
+    [
+        METHOD print() {
+            PRINTS ""
+        }
+
+        METHOD length() RETURNS INT len {
+            len := 0
+        }
+
+        METHOD insert(OBJ Rational newel) RETURNS OBJ RationalList newHead {
+            newHead := RationalList(newel)
+        }
+
+        METHOD get(INT i) RETURNS OBJ Rational res {
+            PRINTLNS "Index out of range!"
+            ERROR
+        }
+    ]
+
+    PROCEDURE getPrimegameProgram() RETURNS OBJ RationalList prog {
+        prog := RationalList(Rational(17, 91))
+        prog := prog.insert(Rational(78, 85))
+        prog := prog.insert(Rational(19, 51))
+        prog := prog.insert(Rational(23, 38))
+        prog := prog.insert(Rational(29, 33))
+        prog := prog.insert(Rational(77, 29))
+        prog := prog.insert(Rational(95, 23))
+        prog := prog.insert(Rational(77, 19))
+        prog := prog.insert(Rational(1, 17))
+        prog := prog.insert(Rational(11, 13))
+        prog := prog.insert(Rational(13, 11))
+        prog := prog.insert(Rational(15, 2))
+        prog := prog.insert(Rational(1, 7))
+        prog := prog.insert(Rational(55, 1))
+    }
+
+    PROCEDURE getFibonacciProgram() RETURNS OBJ RationalList prog {
+        prog := RationalList(Rational(91, 33))
+        prog := prog.insert(Rational(11, 13))
+        prog := prog.insert(Rational(1, 11))
+        prog := prog.insert(Rational(399, 34))
+        prog := prog.insert(Rational(17, 19))
+        prog := prog.insert(Rational(1, 17))
+        prog := prog.insert(Rational(2, 7))
+        prog := prog.insert(Rational(187, 5))
+        prog := prog.insert(Rational(1, 3))
+    }
+
+    PROCEDURE getCustomProgram() RETURNS OBJ RationalList prog {
+        PRINTLNS "You will be asked to enter each rational number, numerator and denominator separately."
+        PRINTLNS "All rational numbers must be positive."
+        PRINTLNS "To complete the input, enter a zero denominator."
+        INT programComplete
+        programComplete := 0
+        INT counter
+        counter := 0
+
+        WHILE programComplete = 0 DO {
+            INT den
+            INT num
+
+            PRINTS "Rational number "
+            PRINTI counter
+            PRINTLNS ": "
+            PRINTLNS "Please enter the numerator: "
+            READ num
+            PRINTLNS "Please enter the denominator: "
+            READ den
+
+            IF den = 0 THEN {
+                programComplete := 1
+            }
+            IF NOT den = 0 THEN {
+                OBJ Rational newrat
+                newrat := Rational(num, den)
+                IF newrat.isPositive() = 0 THEN {
+                    PRINTLNS "All rationals must be positive!"
+                    ERROR
+                }
+                IF counter = 0 THEN {
+                    prog := RationalList(newrat)
+                }
+                IF NOT counter = 0 THEN {
+                    prog := prog.insert(newrat)
+                }
+                counter := counter + 1
+            }
+        }
+        
+        IF counter < 1 THEN {
+            PRINTLNS "You entered an empty program!"
+            ERROR
+        }
+    }
+] DO {
+    OBJ RationalList program
+    INT programChoice
+
+    PRINTLNS "Welcome to the FRACTRAN interpreter."
+    PRINTLNS "Which program do you want to execute?"
+    PRINTLNS "0: PRIMEGAME"
+    PRINTLNS "1: Fibonacci"
+    PRINTLNS "2: Enter program interactively"
+    READ programChoice
+    IF programChoice < 0 THEN { 
+        PRINTLNS "Invalid input!"
+        ERROR
+    }
+    IF programChoice = 0 THEN program := getPrimegameProgram()
+    IF programChoice = 1 THEN program := getFibonacciProgram()
+    IF programChoice = 2 THEN program := getCustomProgram()
+    IF programChoice > 2 THEN { 
+        PRINTLNS "Invalid input!"
+        ERROR
+    }
+
+    INT programLength
+    programLength := program.length()
+
+    INT input
+    PRINTS "Input number: "
+    READ input
+
+    PRINTS "Program: "
+    CALL program.print()
+    PRINTLNS ""
+    PRINTS "Input: "
+    PRINTI input
+    PRINTLNS ""
+    PRINTLNS "Program output: "
+
+    INT currentInput
+    currentInput := input
+    INT currentIndex
+    currentIndex := 0
+
+    WHILE currentIndex < programLength DO {
+        OBJ Rational currentFrac
+        currentFrac := program.get(currentIndex)
+        currentFrac := currentFrac.multiply(currentInput)
+        INT isNatural
+        isNatural := currentFrac.isNatural()
+        IF isNatural = 1 THEN {
+            currentInput := currentFrac.getNumerator() / currentFrac.getDenominator()
+            currentIndex := 0
+            PRINTI currentInput
+            PRINTLNS ""
+        }
+        IF isNatural = 0 THEN {
+            currentIndex := currentIndex + 1
+        }
+    }
+}
