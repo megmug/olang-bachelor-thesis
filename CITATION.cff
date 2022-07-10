@@ -1,0 +1,15 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: >-
+  Conception and Implementation of an Object-Oriented
+  Mini-Language - provided implementation
+message: Please cite this software using these metadata.
+type: software
+authors:
+  - given-names: Daniel
+    email: maier.dan@campus.lmu.de
+    family-names: Maier
+repository-code: 'https://github.com/megmug/olang-bachelor-thesis'
+license: AGPL-3.0
