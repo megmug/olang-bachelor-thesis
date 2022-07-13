@@ -1,0 +1,56 @@
+USING [
+    CLASS Animal()
+    INIT {
+        PRINTLNS "An animal was born!"
+    }
+    [
+        METHOD makeSound() {
+            PRINTLNS "*generic animal sound*"
+        }
+    ]
+
+    CLASS Dog()
+    SUBCLASSOF Animal
+    INIT {
+        PRINTLNS "A dog was born!"
+    }
+    [
+        METHOD makeSound() {
+            PRINTLNS "Woof!"
+        }
+    ]
+
+    CLASS Cat()
+    SUBCLASSOF Animal
+    INIT {
+        PRINTLNS "A cat was born!"
+    }
+    [
+        METHOD makeSound() {
+            PRINTLNS "Meow!"
+        }
+    ]
+
+    PROCEDURE makeSound(OBJ Animal a) {
+        PRINTLNS "*generic animal sound*"
+    }
+
+    PROCEDURE makeSound(OBJ Dog d) {
+        PRINTLNS "Woof!"
+    }
+
+    PROCEDURE makeSound(OBJ Cat c) {
+        PRINTLNS "Meow!"
+    }
+] DO {
+    OBJ Animal a
+    a := Animal()
+    CALL makeSound(a)
+    CALL a.makeSound()
+    a := Dog()
+    CALL makeSound(a)
+    CALL a.makeSound()
+    a := Cat()
+    CALL makeSound(a)
+    CALL a.makeSound()
+}
