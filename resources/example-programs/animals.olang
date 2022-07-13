@@ -1,36 +1,59 @@
 USING [
-    CLASS Animal(INT id)
-    FIELDS INT id
+    CLASS Animal()
     INIT {
-        this.id := id
+        PRINTLNS "An animal was born!"
     }
     [
-        METHOD print() {
-            PRINTS "I am an animal with id "
-            PRINTI this.id
-            PRINTLNS "!"
+        METHOD makeSound() {
+            PRINTLNS "*generic animal sound*"
         }
     ]
 
-    CLASS Horse(INT id)
+    CLASS Dog()
     SUBCLASSOF Animal
     INIT {
-        this.id := id
+        PRINTLNS "A dog was born!"
     }
     [
-        METHOD print() {
-            PRINTS "I am a horse with id "
-            PRINTI this.id
-            PRINTLNS "!"
+        METHOD makeSound() {
+            PRINTLNS "Woof!"
         }
     ]
-]
-DO {
-    OBJ Animal one
-    one := Animal(1)
-    CALL one.print()
 
-    OBJ Animal two
-    two := Horse(2)
-    CALL two.print()   
+    CLASS Cat()
+    SUBCLASSOF Animal
+    INIT {
+        PRINTLNS "A cat was born!"
+    }
+    [
+        METHOD makeSound() {
+            PRINTLNS "Meow!"
+        }
+    ]
+] DO {
+    INT choice
+    OBJ Animal chosenOne
+
+    PRINTLNS "What kind of animal do you like most?"
+    PRINTLNS "0: Dogs"
+    PRINTLNS "1: Cats"
+    PRINTLNS "otherwise: a different one"
+
+    READ choice
+    IF choice = 0 THEN {
+        PRINTLNS "Congratulations, you get a dog!"
+        chosenOne := Dog()
+    }
+    IF choice = 1 THEN {
+        PRINTLNS "Congratulations, you get a cat!"
+        chosenOne := Cat()
+    }
+    IF NOT choice = 0 THEN {
+        IF NOT choice = 1 THEN {
+            PRINTLNS "Congratulations, you get some other animal!"
+            chosenOne := Animal()
+        }
+    }
+    PRINTLNS "What sound does it make?"
+    CALL chosenOne.makeSound()
 }
