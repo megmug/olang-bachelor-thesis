@@ -35,13 +35,13 @@ spec = do
       ackOutput `shouldSatisfy` isRight
       case ackOutput of
         Left _ -> return ()
-        Right out -> out `shouldBe` "61\nProgram terminated successfully.\n"
+        Right out -> out `shouldBe` "61"
 
       let sndAckOutput = runTest ackProgram ["3", "4"]
       sndAckOutput `shouldSatisfy` isRight
       case sndAckOutput of
         Left _ -> return ()
-        Right out -> out `shouldBe` "125\nProgram terminated successfully.\n"
+        Right out -> out `shouldBe` "125"
 
     it "dividing by zero throws an exception" $ do
       divSource <- readFile "resources/test-programs/divzero.olang"

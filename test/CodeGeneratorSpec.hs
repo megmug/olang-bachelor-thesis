@@ -84,10 +84,6 @@ spec = do
       prog <- readFile "resources/example-programs/linkedlist.olang"
       unsafeGenerate prog `shouldSatisfy` isRight
 
-    it "can compile potfak program" $ do
-      prog <- readFile "resources/example-programs/potfak.olang"
-      unsafeGenerate prog `shouldSatisfy` isRight
-
     it "can compile primes program" $ do
       prog <- readFile "resources/example-programs/primes.olang"
       unsafeGenerate prog `shouldSatisfy` isRight
