@@ -4,3 +4,9 @@ system-ghc: true
 
 packages:
 - .
+
+# workaround for Mac OS - the problem is fixed in GHC 9.2.3, but stackage doesn't have a compatible stable release yet
+# see https://gitlab.haskell.org/ghc/ghc/-/issues/20592
+# if it doesn't compile on your Mac OS system, run command "echo `xcrun --show-sdk-path`/usr/include/ffi", paste the resulting output path there and uncomment:
+# extra-include-dirs:
+# - <paste output here and remove brackets>

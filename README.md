@@ -10,6 +10,6 @@ Example: "stack run olang ./resources/example-programs/ackermann.olang"
 - Operating system:
     * Linux
     * Microsoft Windows 10
-    * Microsoft Windows 11 
-    * Mac OS probably works too, but it was not tested
-- AND EITHER working haskell-stack >= 2.7.5 installation OR (recommended) working nix >= 2.6 installation
+    * Microsoft Windows 11
+    * Mac OS - if it doesn't work, see the comment in stack.yaml for a workaround!
+- AND EITHER working haskell-stack >= 2.7.5 installation OR (recommended for full dev-environment) working nix >= 2.6 installation
