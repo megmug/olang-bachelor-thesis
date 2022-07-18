@@ -76,14 +76,6 @@ spec = do
       prog <- readFile "resources/example-programs/animals.olang"
       unsafeGenerate prog `shouldSatisfy` isRight
 
-    it "can compile bank program" $ do
-      prog <- readFile "resources/example-programs/bank.olang"
-      unsafeGenerate prog `shouldSatisfy` isRight
-
-    it "can compile linked list program" $ do
-      prog <- readFile "resources/example-programs/linkedlist.olang"
-      unsafeGenerate prog `shouldSatisfy` isRight
-
     it "can compile primes program" $ do
       prog <- readFile "resources/example-programs/primes.olang"
       unsafeGenerate prog `shouldSatisfy` isRight
