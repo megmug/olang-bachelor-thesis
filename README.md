@@ -7,5 +7,9 @@ Example: "stack run olang ./resources/example-programs/ackermann.olang"
 
 # REQUIREMENTS
 
-- EITHER already working and compatible ghc + stack installation OR (recommended) working nix >= 2.6 installation
-- Linux operating system (Mac OS or Windows probably work too, but they were not tested)
+- Operating system:
+    * Linux
+    * Microsoft Windows 10
+    * Microsoft Windows 11 
+    * Mac OS probably works too, but it was not tested
+- AND EITHER working haskell-stack >= 2.7.5 installation OR (recommended) working nix >= 2.6 installation
