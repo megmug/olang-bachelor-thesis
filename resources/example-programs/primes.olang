@@ -11,7 +11,7 @@ DO {
                 IF (n / m) * m = n THEN isprime := 0
                 m := m + 1
         }
-        IF isprime = 1 THEN {
+        IF NOT isprime = 0 THEN {
             PRINTI n
             PRINTLNS ""
         }
