@@ -490,7 +490,9 @@ runTraceIO cs = do
       print m
       m' <- stepIO m
       if isHalted m'
-        then return ()
+        then do 
+          print m'
+          return ()
         else stepIOWithTraceUntilHalted m'
 
 runInteractiveIO :: [Command] -> IO ()
