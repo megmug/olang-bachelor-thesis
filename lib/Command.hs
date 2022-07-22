@@ -50,7 +50,6 @@ data Command
        Requires: t represents a valid type - which means that a method table with index t must exist
        Ensures: - New heap frame of size n is allocated and initialized:
                   -- Type is initialized
-                  -- Reference counter is set to 0
                   -- All data fields of the frame are initialized with zero values
                 - Address of newly created heap frame is pushed onto the stack
     -}
