@@ -320,9 +320,6 @@ step = do
     Jump a -> do
       jumpTo a
       return Nothing
-    JumpIfTrue a -> do
-      conditionalJumpTo True a
-      return Nothing
     JumpIfFalse a -> do
       conditionalJumpTo False a
       return Nothing

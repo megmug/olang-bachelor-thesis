@@ -65,13 +65,6 @@ data Command
        Ensures: Program counter is overridden with address a
     -}
     Jump CodeAddress
-  | {- Jump to specified code address a iff top of stack is True
-       Requires: a is a valid code address
-       Ensures: - Old top of stack is popped
-                - IFF old top of stack represents boolean value "True": Program counter is overridden with address a
-                - IFF old top of stack represents boolean value "False": Program continues normally
-    -}
-    JumpIfTrue CodeAddress
   | {- Jump to specified code address a iff top of stack is False
        Requires: a is a valid code address
        Ensures: - Old top of stack is popped
