@@ -6,7 +6,7 @@ import SyntaxTree
   ( ActualParameterList,
     Call (SymbolReference),
     ClassDeclaration,
-    Command,
+    Instruction,
     Condition,
     Expression,
     Factor (CallFactor, Integer),
@@ -136,70 +136,70 @@ spec = do
           parse (unsafeTokenize "NOT 1=2") :: ParseResult Condition
           `shouldSatisfy` isRight
 
-    describe "commands" $ do
+    describe "instructions" $ do
       it "can parse assignment" $
         do
-          parse (unsafeTokenize "test := 3") :: ParseResult Command
+          parse (unsafeTokenize "test := 3") :: ParseResult Instruction
           `shouldSatisfy` isRight
 
-      it "can parse int declaration command" $
+      it "can parse int declaration instruction" $
         do
-          parse (unsafeTokenize "INT test") :: ParseResult Command
+          parse (unsafeTokenize "INT test") :: ParseResult Instruction
           `shouldSatisfy` isRight
 
-      it "can parse object declaration command" $
+      it "can parse object declaration instruction" $
         do
-          parse (unsafeTokenize "OBJ Test test") :: ParseResult Command
+          parse (unsafeTokenize "OBJ Test test") :: ParseResult Instruction
           `shouldSatisfy` isRight
 
-      it "can parse call command" $
+      it "can parse call instruction" $
         do
-          parse (unsafeTokenize "CALL test()") :: ParseResult Command
+          parse (unsafeTokenize "CALL test()") :: ParseResult Instruction
           `shouldSatisfy` isRight
 
-      it "can parse read command" $
+      it "can parse read instruction" $
         do
-          parse (unsafeTokenize "READ test") :: ParseResult Command
+          parse (unsafeTokenize "READ test") :: ParseResult Instruction
           `shouldSatisfy` isRight
 
-      it "can parse unit command block" $
+      it "can parse unit instruction block" $
         do
-          parse (unsafeTokenize "{ READ test }") :: ParseResult Command
+          parse (unsafeTokenize "{ READ test }") :: ParseResult Instruction
           `shouldSatisfy` isRight
 
-      it "can parse complex command block" $
+      it "can parse complex instruction block" $
         do
-          parse (unsafeTokenize "{ READ test READ test }") :: ParseResult Command
+          parse (unsafeTokenize "{ READ test READ test }") :: ParseResult Instruction
           `shouldSatisfy` isRight
 
-      it "can not parse empty command block" $
+      it "can not parse empty instruction block" $
         do
-          parse (unsafeTokenize "{ }") :: ParseResult Command
+          parse (unsafeTokenize "{ }") :: ParseResult Instruction
           `shouldSatisfy` isLeft
 
-      it "can parse if-then-command" $
+      it "can parse if-then-instruction" $
         do
-          parse (unsafeTokenize "IF 1 = 1 THEN PRINTI test") :: ParseResult Command
+          parse (unsafeTokenize "IF 1 = 1 THEN PRINTI test") :: ParseResult Instruction
           `shouldSatisfy` isRight
 
-      it "can parse while command" $
+      it "can parse while instruction" $
         do
-          parse (unsafeTokenize "WHILE 1 = 1 DO PRINTI test") :: ParseResult Command
+          parse (unsafeTokenize "WHILE 1 = 1 DO PRINTI test") :: ParseResult Instruction
           `shouldSatisfy` isRight
 
-      it "can parse printi command" $
+      it "can parse printi instruction" $
         do
-          parse (unsafeTokenize "PRINTI test") :: ParseResult Command
+          parse (unsafeTokenize "PRINTI test") :: ParseResult Instruction
           `shouldSatisfy` isRight
 
-      it "can parse prints command" $
+      it "can parse prints instruction" $
         do
-          parse (unsafeTokenize "PRINTS \"test\"") :: ParseResult Command
+          parse (unsafeTokenize "PRINTS \"test\"") :: ParseResult Instruction
           `shouldSatisfy` isRight
 
-      it "can parse error command" $
+      it "can parse error instruction" $
         do
-          parse (unsafeTokenize "ERROR \"test\" ") :: ParseResult Command
+          parse (unsafeTokenize "ERROR \"test\" ") :: ParseResult Instruction
           `shouldSatisfy` isRight
 
     describe "calls" $ do

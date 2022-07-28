@@ -8,7 +8,7 @@ import SyntaxTree
   ( ActualParameterList,
     Call (..),
     ClassDeclaration (..),
-    Command (..),
+    Instruction (..),
     Condition (..),
     Expression (..),
     Factor (..),
@@ -62,7 +62,7 @@ instance Parseable Program where
   parser = do
     mcps <- using
     _ <- accept DO
-    cmd <- command
+    cmd <- instruction
     eof
     return
       ( case mcps of
@@ -86,7 +86,7 @@ instance Parseable ClassDeclaration where
         <*> formalparameterlist
         <*> optionMaybe (accept SUBCLASSOF *> acceptClassName)
         <*> (fromMaybe [] <$> optionMaybe (accept FIELDS *> many1 symboldeclaration))
-        <*> (accept INIT *> command)
+        <*> (accept INIT *> instruction)
         <*> (fromMaybe [] <$> optionMaybe (accept OpenSquareBracket *> many1 methoddeclaration <* accept CloseSquareBracket))
 
 intsymboldeclaration :: Parser IntSymbolDeclaration
@@ -135,13 +135,13 @@ methoddeclaration :: Parser MethodDeclaration
 methoddeclaration = parser
 
 instance Parseable MethodDeclaration where
-  parser = Method <$> (accept METHOD *> procedureheader) <*> command
+  parser = Method <$> (accept METHOD *> procedureheader) <*> instruction
 
 proceduredeclaration :: Parser ProcedureDeclaration
 proceduredeclaration = parser
 
 instance Parseable ProcedureDeclaration where
-  parser = Procedure <$> (accept PROCEDURE *> procedureheader) <*> command
+  parser = Procedure <$> (accept PROCEDURE *> procedureheader) <*> instruction
 
 procedureheader :: Parser ProcedureHeader
 procedureheader = parser
@@ -181,18 +181,18 @@ instance Parseable SymbolReference where
           Just n' -> FieldReference n n'
       )
 
-command :: Parser Command
-command = parser
+instruction :: Parser Instruction
+instruction = parser
 
-instance Parseable Command where
+instance Parseable Instruction where
   parser =
     Assignment <$> symbolreference <* accept (::=) <*> expression
-      <|> SymbolDeclarationCommand <$> symboldeclaration
-      <|> CallCommand <$> (accept CALL *> call)
+      <|> SymbolDeclarationInstruction <$> symboldeclaration
+      <|> CallInstruction <$> (accept CALL *> call)
       <|> Read <$> (accept READ *> acceptSymbolName)
-      <|> Block <$> (fromList <$> (accept OpenCurlyBracket *> many1 command <* accept CloseCurlyBracket))
-      <|> IfThen <$> (accept IF *> condition) <*> (accept THEN *> command)
-      <|> While <$> (accept WHILE *> condition) <*> (accept DO *> command)
+      <|> Block <$> (fromList <$> (accept OpenCurlyBracket *> many1 instruction <* accept CloseCurlyBracket))
+      <|> IfThen <$> (accept IF *> condition) <*> (accept THEN *> instruction)
+      <|> While <$> (accept WHILE *> condition) <*> (accept DO *> instruction)
       <|> PrintI <$> (accept PRINTI *> expression)
       <|> PrintS <$> (accept PRINTS *> acceptString)
       <|> PrintLnS <$> (accept PRINTLNS *> acceptString)

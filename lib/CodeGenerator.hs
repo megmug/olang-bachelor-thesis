@@ -52,7 +52,7 @@ import SyntaxTree
   ( Call (..),
     ClassDeclaration (..),
     ClassName,
-    Command (..),
+    Instruction (..),
     Condition (..),
     Expression (..),
     Factor (..),
@@ -127,8 +127,8 @@ data GenState = GenState PrefixLength SymTable ProcTable ClassTable
 -- The typifier essentially shares the code generator's state, but doesn't need to know the current prefix
 data TypeState = TypeState SymTable ProcTable ClassTable
 
--- Every command can be in procedure-, method-, main-program- context or inside of a command block
-data CommandContext = PROCEDURE | METHOD | MAIN | INNER
+-- Every instruction can be in procedure-, method-, main-program- context or inside of an instruction block
+data InstructionContext = PROCEDURE | METHOD | MAIN | INNER
 
 -- Here we define a type for monadic actions that represent the types of our code generators and typifiers
 type GeneratorAction a = ExceptT String (State GenState) a
@@ -166,19 +166,19 @@ classtablet f (TypeState st pt ct) = (\ct' -> TypeState st pt ct') <$> f ct
 
 -- ContextGeneratable is meant for syntactical elements that can be compiled, but need additional context information to the GenState alone
 class ContextGeneratable c a where
-  contextGenerator :: c -> a -> GeneratorAction [Instruction]
+  contextGenerator :: c -> a -> GeneratorAction [MachineInstruction.Instruction]
 
 -- Generatable is for syntactical elements that can be compiled without additional context (apart from the GenState)
 class Generatable a where
   -- A generator creates a monadic action from a syntactical element that can generate code for it
-  generator :: a -> GeneratorAction [Instruction]
+  generator :: a -> GeneratorAction [MachineInstruction.Instruction]
 
   -- This runs a generator with some supplied state (can also be useful for testing)
-  customGenerate :: a -> GenState -> Either String [Instruction]
+  customGenerate :: a -> GenState -> Either String [MachineInstruction.Instruction]
   customGenerate e s = evalState (runExceptT $ generator e) s
 
   -- This runs a generator with some default empty state (mostly useful for whole programs)
-  generate :: a -> Either String [Instruction]
+  generate :: a -> Either String [MachineInstruction.Instruction]
   generate e = customGenerate e $ GenState 0 [] [] []
 
 -- A small helper to output the generator state in case of failure
@@ -348,22 +348,22 @@ isIntType (Just INT) = True
 isIntType (Just (OBJ _)) = False
 
 -- This function calculates the required memory a procedure needs to allocate for local variables declared in its code
-calculateCommandStackMemoryRequirements :: SyntaxTree.Command -> Int
-calculateCommandStackMemoryRequirements (SymbolDeclarationCommand _) = 1
-calculateCommandStackMemoryRequirements (Block (c :| [])) = calculateCommandStackMemoryRequirements c
-{- If a block has at least 2 commands, the memory required is determined by the question if the first command is a block, too.
+calculateInstructionStackMemoryRequirements :: SyntaxTree.Instruction -> Int
+calculateInstructionStackMemoryRequirements (SymbolDeclarationInstruction _) = 1
+calculateInstructionStackMemoryRequirements (Block (c :| [])) = calculateInstructionStackMemoryRequirements c
+{- If a block has at least 2 instructions, the memory required is determined by the question if the first instruction is a block, too.
  - This is because of how blocks are compiled:
  - After compiling a block, its symbols get flushed from the table again because they should not be visible from outside
  - If the block is entered twice, the values are reset.
- - So if the (inner) block needs more space than the following commands, its memory requirement is dominant
- - Otherwise the requirement of the following commands is dominant - so we calculate the max value of both
+ - So if the (inner) block needs more space than the following instructions, its memory requirement is dominant
+ - Otherwise the requirement of the following instructions is dominant - so we calculate the max value of both
  -}
-calculateCommandStackMemoryRequirements (Block (c :| (c' : cs))) = case c of
-  Block _ -> max (calculateCommandStackMemoryRequirements c) (calculateCommandStackMemoryRequirements $ Block $ c' :| cs)
-  _ -> calculateCommandStackMemoryRequirements c + calculateCommandStackMemoryRequirements (Block $ c' :| cs)
-calculateCommandStackMemoryRequirements (IfThen _ c) = calculateCommandStackMemoryRequirements c
-calculateCommandStackMemoryRequirements (While _ c) = calculateCommandStackMemoryRequirements c
-calculateCommandStackMemoryRequirements _ = 0
+calculateInstructionStackMemoryRequirements (Block (c :| (c' : cs))) = case c of
+  Block _ -> max (calculateInstructionStackMemoryRequirements c) (calculateInstructionStackMemoryRequirements $ Block $ c' :| cs)
+  _ -> calculateInstructionStackMemoryRequirements c + calculateInstructionStackMemoryRequirements (Block $ c' :| cs)
+calculateInstructionStackMemoryRequirements (IfThen _ c) = calculateInstructionStackMemoryRequirements c
+calculateInstructionStackMemoryRequirements (While _ c) = calculateInstructionStackMemoryRequirements c
+calculateInstructionStackMemoryRequirements _ = 0
 
 {--}
 
@@ -372,23 +372,23 @@ calculateCommandStackMemoryRequirements _ = 0
 instance Generatable Program where
   generator (Program classes procs c) = do
     let numMethodTables = length classes
-    -- There is 1 jump and additionally 1 method table creation command for every class at the start of the program
+    -- There is 1 jump and additionally 1 method table creation instruction for every class at the start of the program
     prefixlength += 1 + numMethodTables
-    classCommands <- traverse generator classes
-    procCommands <- traverse (contextGenerator NORMAL) procs
+    classInstructions <- traverse generator classes
+    procInstructions <- traverse (contextGenerator NORMAL) procs
     -- reserve stack memory for variable declarations in main program
-    let mainStackMemoryAllocationCommands = replicate (calculateCommandStackMemoryRequirements c) (PushInt 0)
-    prefixlength += length mainStackMemoryAllocationCommands
+    let mainStackMemoryAllocationInstructions = replicate (calculateInstructionStackMemoryRequirements c) (PushInt 0)
+    prefixlength += length mainStackMemoryAllocationInstructions
     mainProgram <- contextGenerator MAIN c
     ct <- use classtable
-    let programCommands = [Reset] ++ getMTables ct ++ concat classCommands ++ concat procCommands ++ mainStackMemoryAllocationCommands ++ mainProgram ++ [Halt]
+    let programInstructions = [Reset] ++ getMTables ct ++ concat classInstructions ++ concat procInstructions ++ mainStackMemoryAllocationInstructions ++ mainProgram ++ [Halt]
     {- set state accordingly (not strictly necessary, but for sake of consistency with other generators, we do it none the less) -}
-    prefixlength .= length programCommands
+    prefixlength .= length programInstructions
     symtable .= []
     proctable .= []
     classtable .= []
     {--}
-    return programCommands
+    return programInstructions
     where
       getMTables ct = map getMTable ct
       getMTable (cid, ClassEntry _ _ _ mt) = CreateMethodTable cid (map getMethodAddress mt)
@@ -414,10 +414,10 @@ instance Generatable ClassDeclaration where
     traverse_ (addFieldToClassEntry newClassID) fields
     {- Generate initializer as procedure with object 'this' as implicit return parameter and preceding memory allocation -}
     let initProcedure = Procedure (ProcedureHeader ("INIT_" ++ n) ps (Just $ ObjectDeclaration $ Object n "this") []) ini
-    initCommands <- contextGenerator INIT initProcedure
+    initInstructions <- contextGenerator INIT initProcedure
     {- Generate methods -}
-    methodCommands <- traverse (contextGenerator newClassID) methods
-    return $ initCommands ++ concat methodCommands
+    methodInstructions <- traverse (contextGenerator newClassID) methods
+    return $ initInstructions ++ concat methodInstructions
     where
       addFieldToClassEntry :: ClassID -> SymbolDeclaration -> GeneratorAction ()
       addFieldToClassEntry cid sd = do
@@ -435,7 +435,7 @@ instance ContextGeneratable ClassID MethodDeclaration where
     {- Insert new entry / Override existing into method table of corresponding class -}
     -- Check for duplicate parameter names
     when (hasNameCollisions pl) $ throwE $ "parameter list of procedure " ++ n ++ " has duplicates"
-    -- There will be one jump command before the actual method code starts
+    -- There will be one jump instruction before the actual method code starts
     prefixlength += 1
     methodCodeStart <- use prefixlength
     let newMethodEntry = ProcEntry (Signature n (map symbolDeclToType pl) (symbolDeclToType <$> mrp)) methodCodeStart
@@ -444,7 +444,7 @@ instance ContextGeneratable ClassID MethodDeclaration where
     -- Save the old procedure table for the reset later
     oldpt <- use proctable
     -- Generate the sub-procedure code
-    subProcedureCommands <- traverse (contextGenerator NORMAL) ps
+    subProcedureInstructions <- traverse (contextGenerator NORMAL) ps
     {- Insert object, parameters and return parameter into symbol table -}
     ct <- use classtable
     thisParam <- case lookup cid ct of
@@ -457,9 +457,9 @@ instance ContextGeneratable ClassID MethodDeclaration where
     st <- use symtable
     symtable .= addParamsToSymbols st params
     stWithParams <- use symtable
-    {- Generate method commands, including stack memory allocation -}
-    stackMemoryAllocationCommands <- do
-      let localVariableMemoryRequirements = calculateCommandStackMemoryRequirements c
+    {- Generate method instructions, including stack memory allocation -}
+    stackMemoryAllocationInstructions <- do
+      let localVariableMemoryRequirements = calculateInstructionStackMemoryRequirements c
       -- if return parameter is not in parameter list, allocate a stack cell for it, too
       let returnParameterMemoryRequirements =
             case mrp of
@@ -468,15 +468,15 @@ instance ContextGeneratable ClassID MethodDeclaration where
       let stackMemoryRequirements = localVariableMemoryRequirements + returnParameterMemoryRequirements
       prefixlength += stackMemoryRequirements
       return $ replicate stackMemoryRequirements (PushInt 0)
-    methodCommands <- contextGenerator METHOD c
-    {- Create necessary commands for return -}
-    returnCommands <- case mrp of
+    methodInstructions <- contextGenerator METHOD c
+    {- Create necessary instructions for return -}
+    returnInstructions <- case mrp of
       Nothing -> return [Return False]
       Just rp -> case lookupSymbol stWithParams (getSymbolDeclName rp) of
         Nothing -> throwE "BUG encountered: return parameter missing from symbols!"
         Just (SymbolEntry _ _ p) -> return [LoadStack p, Return True]
     -- Update prefix
-    prefixlength += length returnCommands
+    prefixlength += length returnInstructions
     {- Cleanup state -}
     -- Reset symbol table
     symtable .= []
@@ -484,7 +484,7 @@ instance ContextGeneratable ClassID MethodDeclaration where
     proctable .= oldpt
     {- Return generated procedure code -}
     newPrefix <- use prefixlength
-    return $ [Jump newPrefix] ++ concat subProcedureCommands ++ stackMemoryAllocationCommands ++ methodCommands ++ returnCommands
+    return $ [Jump newPrefix] ++ concat subProcedureInstructions ++ stackMemoryAllocationInstructions ++ methodInstructions ++ returnInstructions
     where
       updateClassTableWithNewMethod :: ClassID -> ProcEntry -> GeneratorAction ()
       updateClassTableWithNewMethod cid' pe@(ProcEntry s _) = do
@@ -520,15 +520,15 @@ instance ContextGeneratable ProcKind ProcedureDeclaration where
     when (hasNameCollisions pl) $ throwE $ "parameter list of procedure " ++ n ++ " has duplicates"
     pt <- use proctable
     oldPrefix <- use prefixlength
-    -- Address of new procedure must be the old prefix + 1, because of the jump command at the beginning that must be skipped
+    -- Address of new procedure must be the old prefix + 1, because of the jump instruction at the beginning that must be skipped
     let newProcEntry = ProcEntry (Signature n (map symbolDeclToType pl) (symbolDeclToType <$> mrp)) (oldPrefix + 1)
     -- Update state with new procedure entry
     proctable .= newProcEntry : pt
     {- Generate sub-procedures -}
-    -- Increase prefix by 1 - we know there will be 1 new jump command for the upper procedure before the subprocedures
+    -- Increase prefix by 1 - we know there will be 1 new jump instruction for the upper procedure before the subprocedures
     prefixlength += 1
     -- Generate code for sub procedures
-    subProcedureCommands <- traverse (contextGenerator NORMAL) ps
+    subProcedureInstructions <- traverse (contextGenerator NORMAL) ps
     {- Insert parameters and return parameter into symbol table -}
     let params = case mrp of
           Nothing -> pl
@@ -537,8 +537,8 @@ instance ContextGeneratable ProcKind ProcedureDeclaration where
     symtable .= addParamsToSymbols st params
     stWithParams <- use symtable
     {- Generate procedure code, including stack memory allocation and, in case of initializers, heap memory allocation-}
-    stackMemoryAllocationCommands <- do
-      let localVariableMemoryRequirements = calculateCommandStackMemoryRequirements c
+    stackMemoryAllocationInstructions <- do
+      let localVariableMemoryRequirements = calculateInstructionStackMemoryRequirements c
       -- if return parameter is not in parameter list, allocate a stack cell for it, too
       let returnParameterMemoryRequirements =
             case mrp of
@@ -547,8 +547,8 @@ instance ContextGeneratable ProcKind ProcedureDeclaration where
       let stackMemoryRequirements = localVariableMemoryRequirements + returnParameterMemoryRequirements
       prefixlength += stackMemoryRequirements
       return $ replicate stackMemoryRequirements (PushInt 0)
-    -- IF INIT procedure: generate memory allocation commands and update prefix accordingly
-    heapMemoryAllocationCommands <- case kind of
+    -- IF INIT procedure: generate memory allocation instructions and update prefix accordingly
+    heapMemoryAllocationInstructions <- case kind of
       INIT -> do
         prefixlength += 2
         case mrp of
@@ -563,16 +563,16 @@ instance ContextGeneratable ProcKind ProcedureDeclaration where
                   Nothing -> throwE "BUG encountered: initializer with invalid return type!"
                   Just (cid, ClassEntry _ _ ft _) -> return [AllocateHeap (length ft) cid, StoreStack p]
       _ -> return []
-    -- generate the commands
-    procedureCommands <- contextGenerator PROCEDURE c
-    {- Create necesary commands for return -}
-    returnCommands <- case mrp of
+    -- generate the instructions
+    procedureInstructions <- contextGenerator PROCEDURE c
+    {- Create necesary instructions for return -}
+    returnInstructions <- case mrp of
       Nothing -> return [Return False]
       Just rp -> case lookupSymbol stWithParams (getSymbolDeclName rp) of
         Nothing -> throwE "BUG encountered: return parameter missing from symbols!"
         Just (SymbolEntry _ _ p) -> return [LoadStack p, Return True]
     -- Update prefix
-    prefixlength += length returnCommands
+    prefixlength += length returnInstructions
     {- Cleanup state -}
     -- Reset symbol table
     symtable .= []
@@ -580,7 +580,7 @@ instance ContextGeneratable ProcKind ProcedureDeclaration where
     proctable .= newProcEntry : pt
     {- Return generated procedure code -}
     newPrefix <- use prefixlength
-    return $ [Jump newPrefix] ++ concat subProcedureCommands ++ stackMemoryAllocationCommands ++ heapMemoryAllocationCommands ++ procedureCommands ++ returnCommands
+    return $ [Jump newPrefix] ++ concat subProcedureInstructions ++ stackMemoryAllocationInstructions ++ heapMemoryAllocationInstructions ++ procedureInstructions ++ returnInstructions
 
 instance Generatable Call where
   generator (SymbolReference (NameReference n)) = do
@@ -589,7 +589,7 @@ instance Generatable Call where
     pos <- case lookupSymbol st n of
       Nothing -> throwE $ "undefined symbol " ++ n
       Just (SymbolEntry _ _ p) -> return p
-    -- the resulting command is just a load on the symbol's position
+    -- the resulting instruction is just a load on the symbol's position
     prefixlength += 1
     return [LoadStack pos]
   generator (SymbolReference (FieldReference o f)) = do
@@ -606,7 +606,7 @@ instance Generatable Call where
       Just (_, ClassEntry _ _ ft _) -> case lookupFieldByName ft f of
         Nothing -> throwE $ "invalid field " ++ f ++ " reference for object " ++ o
         Just (FieldEntry _ _ p) -> return p
-    -- the resulting commands are a stack load of the symbols position to push the object's address, then a heap load of the referenced field
+    -- the resulting instructions are a stack load of the symbols position to push the object's address, then a heap load of the referenced field
     prefixlength += 2
     return [LoadStack objPos, LoadHeap fieldPos]
   generator (Call (NameReference n) apl) = do
@@ -619,11 +619,11 @@ instance Generatable Call where
       Just ts -> case lookupClosestMatchingProc ct pt n ts of
         Left e -> throwE e
         Right (ProcEntry _ a) -> return a
-    -- generate parameter loading commands and procedure call
-    paramCommands <- traverse generator apl
-    prefixlength += 1 -- we only generate 1 additional command - the procedure call
-    -- the result is all the commands to generate the parameter expressions in order followed by the procedure call
-    return $ concat paramCommands ++ [CallProcedure procAddress (length apl)]
+    -- generate parameter loading instructions and procedure call
+    paramInstructions <- traverse generator apl
+    prefixlength += 1 -- we only generate 1 additional instruction - the procedure call
+    -- the result is all the instructions to generate the parameter expressions in order followed by the procedure call
+    return $ concat paramInstructions ++ [CallProcedure procAddress (length apl)]
   generator (Call (FieldReference o m) apl) = do
     -- lookup method from method table
     paramTypes <- traverse typify apl
@@ -634,17 +634,17 @@ instance Generatable Call where
       Just ts -> case lookupClosestMatchingMethod ct st o m ts of
         Left e -> throwE e
         Right (mid, ProcEntry _ _) -> return mid
-    -- generate parameter loading commands and method call
+    -- generate parameter loading instructions and method call
     -- first, lookup the object position
     objPos <- case lookupSymbol st o of
       Nothing -> throwE $ "call on invalid object symbol " ++ o
       Just (SymbolEntry _ _ p) -> return p
-    let objectLoadingCommand = [LoadStack objPos]
+    let objectLoadingInstruction = [LoadStack objPos]
     prefixlength += 1
-    -- then generate the commands for all the actual parameters
-    paramCommands <- traverse generator apl
+    -- then generate the instructions for all the actual parameters
+    paramInstructions <- traverse generator apl
     prefixlength += 1
-    return $ objectLoadingCommand ++ concat paramCommands ++ [CallMethod methodID (length apl)]
+    return $ objectLoadingInstruction ++ concat paramInstructions ++ [CallMethod methodID (length apl)]
 
 instance Typeable Call where
   typifier (SymbolReference (NameReference n)) = do
@@ -690,7 +690,7 @@ instance Typeable Call where
         -- again, the lookup function does the magic here, we just return its result
         Right (_, ProcEntry (Signature _ _ rt) _) -> return rt
 
-instance ContextGeneratable CommandContext SyntaxTree.Command where
+instance ContextGeneratable InstructionContext SyntaxTree.Instruction where
   contextGenerator ctxt (Assignment (NameReference n) e) = do
     ct <- use classtable
     st <- use symtable
@@ -703,11 +703,11 @@ instance ContextGeneratable CommandContext SyntaxTree.Command where
       Just ty ->
         if isSubtypeOf ct ty symType
           then do
-            -- Type is correct - we can generate the commands
-            eCommands <- generator e
+            -- Type is correct - we can generate the instructions
+            eInstructions <- generator e
             prefixlength += 1
-            updateSymbolTableDependingOnCommandContext ctxt st
-            return $ eCommands ++ [StoreStack symPos]
+            updateSymbolTableDependingOnInstructionContext ctxt st
+            return $ eInstructions ++ [StoreStack symPos]
           else throwDiagnosticError $ "variable " ++ n ++ " was assigned an expression with incompatible type"
   contextGenerator _ (Assignment (FieldReference o f) e) = do
     -- lookup object
@@ -731,14 +731,14 @@ instance ContextGeneratable CommandContext SyntaxTree.Command where
         if isSubtypeOf ct ty fieldType
           then return ()
           else throwE $ "type error: cannot assign to field, as type " ++ show ty ++ " of expression is not a subtype of field " ++ f ++ " with type " ++ show fieldType ++ " of object " ++ o
-    -- generate commands
-    let objAddrLoadCommand = [LoadStack objPos]
+    -- generate instructions
+    let objAddrLoadInstruction = [LoadStack objPos]
     prefixlength += 1
-    expressionCommands <- generator e
-    let storeCommands = [StoreHeap fieldPos]
+    expressionInstructions <- generator e
+    let storeInstruction = [StoreHeap fieldPos]
     prefixlength += 1
-    return $ objAddrLoadCommand ++ expressionCommands ++ storeCommands
-  contextGenerator ctxt (SymbolDeclarationCommand (IntDeclaration (Int n))) = do
+    return $ objAddrLoadInstruction ++ expressionInstructions ++ storeInstruction
+  contextGenerator ctxt (SymbolDeclarationInstruction (IntDeclaration (Int n))) = do
     -- Assemble new symbol entry and add it
     st <- use symtable
     symtable .= addSymbol st n INT
@@ -747,12 +747,12 @@ instance ContextGeneratable CommandContext SyntaxTree.Command where
     pos <- case lookupSymbol st' n of
       Nothing -> throwE "BUG encountered: impossibly, the symbol we just added vanished"
       Just (SymbolEntry _ _ p) -> return p
-    -- return commands and update prefix as well symbol table
+    -- return instructions and update prefix as well symbol table
     prefixlength += 2
-    -- possible optimization: if the context isn't INNER, the commands can be omitted altogether
-    updateSymbolTableDependingOnCommandContext ctxt st
+    -- possible optimization: if the context isn't INNER, the instructions can be omitted altogether
+    updateSymbolTableDependingOnInstructionContext ctxt st
     return [PushInt 0, StoreStack pos]
-  contextGenerator ctxt (SymbolDeclarationCommand (ObjectDeclaration (Object t n))) = do
+  contextGenerator ctxt (SymbolDeclarationInstruction (ObjectDeclaration (Object t n))) = do
     -- Check if class is valid
     ct <- use classtable
     case lookupClassByName t ct of
@@ -766,13 +766,13 @@ instance ContextGeneratable CommandContext SyntaxTree.Command where
     pos <- case lookupSymbol st' n of
       Nothing -> throwE "BUG encountered: impossibly, the symbol we just added vanished"
       Just (SymbolEntry _ _ p) -> return p
-    -- return commands and update prefix as well as symbol table
+    -- return instructions and update prefix as well as symbol table
     prefixlength += 2
-    -- possible optimization: of the context isn't INNER, the commands can be omitted altogether
-    updateSymbolTableDependingOnCommandContext ctxt st
+    -- possible optimization: of the context isn't INNER, the instructions can be omitted altogether
+    updateSymbolTableDependingOnInstructionContext ctxt st
     -- An object declaration doesn't allocate memory, the address will be invalid until the object is initialized
     return [PushInt (-1), StoreStack pos]
-  contextGenerator _ (CallCommand call) = do
+  contextGenerator _ (CallInstruction call) = do
     t <- typify call
     case t of
       Nothing -> generator call
@@ -786,29 +786,29 @@ instance ContextGeneratable CommandContext SyntaxTree.Command where
     prefixlength += 2
     return [MachineInstruction.Read, StoreStack pos]
   contextGenerator _ (Block cs) = do
-    -- save old symbol table for the reset after generating the commands - this implements scoping
+    -- save old symbol table for the reset after generating the instructions - this implements scoping
     st <- use symtable
     cmds <- traverse (contextGenerator INNER) cs
     symtable .= st
     return $ concat cmds
   contextGenerator _ (IfThen cond cmd) = do
     st <- use symtable
-    condCommands <- generator cond
+    condInstructions <- generator cond
     prefixlength += 1
-    bodyCommands <- contextGenerator INNER cmd
+    bodyInstructions <- contextGenerator INNER cmd
     symtable .= st
     p <- use prefixlength
-    return $ condCommands ++ [JumpIfFalse p] ++ bodyCommands
+    return $ condInstructions ++ [JumpIfFalse p] ++ bodyInstructions
   contextGenerator _ (While cond cmd) = do
     st <- use symtable
     oldPrefix <- use prefixlength
-    condCommands <- generator cond
+    condInstructions <- generator cond
     prefixlength += 1
-    bodyCommands <- contextGenerator INNER cmd
+    bodyInstructions <- contextGenerator INNER cmd
     prefixlength += 1
     symtable .= st
     newPrefix <- use prefixlength
-    return $ condCommands ++ [JumpIfFalse newPrefix] ++ bodyCommands ++ [Jump oldPrefix]
+    return $ condInstructions ++ [JumpIfFalse newPrefix] ++ bodyInstructions ++ [Jump oldPrefix]
   contextGenerator _ (SyntaxTree.PrintI e) = do
     t <- typify e
     case t of
@@ -828,20 +828,20 @@ instance ContextGeneratable CommandContext SyntaxTree.Command where
     prefixlength += 1
     return [Halt]
 
-{- This action generator is for correctly setting the symbol table after a command is generated.
+{- This action generator is for correctly setting the symbol table after an instruction is generated.
  - The correct behavior depends on the context:
  - Method-, Procedure- and Main-Program-Context: The symbol table should be reset
- - Inner command as part of a command block: The symbol table should NOT be reset
- - Following commands would need access to the new symbols that preceding commands in the same block generate, for example:
+ - Inner instruction as part of an instruction block: The symbol table should NOT be reset
+ - Following instructions would need access to the new symbols that preceding instructions in the same block generate, for example:
  -  WHILE 1 = 1 { VAR x
  -                x := 0 }
  - A block on the other hand will always reset the symbol table, to respect scoping rules
  - For example, the following should be illegal:
  - PROCEDURE foo(VAR x) { { VAR Y } Y := 0 }
  -}
-updateSymbolTableDependingOnCommandContext :: CommandContext -> SymTable -> GeneratorAction ()
-updateSymbolTableDependingOnCommandContext INNER _ = return ()
-updateSymbolTableDependingOnCommandContext _ st = symtable .= st
+updateSymbolTableDependingOnInstructionContext :: InstructionContext -> SymTable -> GeneratorAction ()
+updateSymbolTableDependingOnInstructionContext INNER _ = return ()
+updateSymbolTableDependingOnInstructionContext _ st = symtable .= st
 
 instance Generatable Condition where
   generator (Comparison e r e') = do
@@ -851,9 +851,9 @@ instance Generatable Condition where
     case t of
       Nothing -> throwE "type error: conditions can only be evaluated on integers"
       Just ty -> when (ty /= INT || t /= t') $ throwE "type error: conditions can only be evaluated on integers"
-    eCommands <- generator e
-    e'Commands <- generator e'
-    let newCmds = eCommands ++ e'Commands ++ [CombineBinary $ conv r]
+    eInstructions <- generator e
+    e'Instructions <- generator e'
+    let newCmds = eInstructions ++ e'Instructions ++ [CombineBinary $ conv r]
     prefixlength += 1
     return newCmds
     where
@@ -870,22 +870,22 @@ instance Generatable Condition where
 instance Generatable Expression where
   generator (Expression ((s, t) :| sts)) = do
     -- If there is a plus, we just generate the factor (works also if s has type OBJ _)
-    -- If there is a minus, we generate PushInt 0 before and Command Minus after the factor, calculating its negated value
-    firstFactorCommands <- case s of
+    -- If there is a minus, we generate PushInt 0 before and CombineBinaryMinus after the factor, calculating its negated value
+    firstFactorInstructions <- case s of
       SyntaxTree.Plus -> generator t
       SyntaxTree.Minus -> do
         prefixlength += 1
-        factorCommands <- generator t
+        factorInstructions <- generator t
         prefixlength += 1
-        return $ [PushInt 0] ++ factorCommands ++ [CombineBinary MachineInstruction.Minus]
-    tsCommands <- traverse stGenerator sts
-    return $ firstFactorCommands ++ concat tsCommands
+        return $ [PushInt 0] ++ factorInstructions ++ [CombineBinary MachineInstruction.Minus]
+    tsInstructions <- traverse stGenerator sts
+    return $ firstFactorInstructions ++ concat tsInstructions
     where
       stGenerator (s', t') = do
-        tCommands <- generator t'
+        tInstructions <- generator t'
         prefixlength += 1
-        let signCommand = [CombineBinary $ conv s']
-        return $ tCommands ++ signCommand
+        let signInstruction = [CombineBinary $ conv s']
+        return $ tInstructions ++ signInstruction
       conv SyntaxTree.Plus = MachineInstruction.Plus
       conv SyntaxTree.Minus = MachineInstruction.Minus
 
@@ -903,15 +903,15 @@ instance Typeable Expression where
 
 instance Generatable Term where
   generator (Term f ofs) = do
-    fCommands <- generator f
-    ofsCommands <- traverse ofsGenerator ofs
-    return $ fCommands ++ concat ofsCommands
+    fInstructions <- generator f
+    ofsInstructions <- traverse ofsGenerator ofs
+    return $ fInstructions ++ concat ofsInstructions
     where
       ofsGenerator (o, f') = do
-        fCommands <- generator f'
+        fInstructions <- generator f'
         prefixlength += 1
-        let oCommand = [CombineBinary $ conv o]
-        return $ fCommands ++ oCommand
+        let oInstruction = [CombineBinary $ conv o]
+        return $ fInstructions ++ oInstruction
       conv SyntaxTree.Times = MachineInstruction.Times
       conv SyntaxTree.Divide = MachineInstruction.Divide
 

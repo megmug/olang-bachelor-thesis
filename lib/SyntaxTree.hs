@@ -13,7 +13,7 @@ type ClassName = String
 
 type SymbolName = String
 
-type Initializer = Command
+type Initializer = Instruction
 
 type ActualParameterList = [Expression]
 
@@ -23,7 +23,7 @@ data Program
   = Program
       [ClassDeclaration]
       [ProcedureDeclaration]
-      Command
+      Instruction
   deriving (Eq, Show)
 
 data ClassDeclaration
@@ -45,9 +45,9 @@ data SymbolDeclaration
   | ObjectDeclaration ObjectSymbolDeclaration
   deriving (Eq, Show)
 
-data MethodDeclaration = Method ProcedureHeader Command deriving (Eq, Show)
+data MethodDeclaration = Method ProcedureHeader Instruction deriving (Eq, Show)
 
-data ProcedureDeclaration = Procedure ProcedureHeader Command deriving (Eq, Show)
+data ProcedureDeclaration = Procedure ProcedureHeader Instruction deriving (Eq, Show)
 
 data ProcedureHeader
   = ProcedureHeader
@@ -67,14 +67,14 @@ data SymbolReference
   | FieldReference SymbolName SymbolName
   deriving (Eq, Show)
 
-data Command
+data Instruction
   = Assignment SymbolReference Expression
-  | SymbolDeclarationCommand SymbolDeclaration
-  | CallCommand Call
+  | SymbolDeclarationInstruction SymbolDeclaration
+  | CallInstruction Call
   | Read SymbolName
-  | Block (NonEmpty Command)
-  | IfThen Condition Command
-  | While Condition Command
+  | Block (NonEmpty Instruction)
+  | IfThen Condition Instruction
+  | While Condition Instruction
   | PrintI Expression
   | PrintS String
   | PrintLnS String

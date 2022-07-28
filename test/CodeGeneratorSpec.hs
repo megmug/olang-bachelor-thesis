@@ -2,32 +2,32 @@ module CodeGeneratorSpec where
 
 import CodeGenerator
   ( Generatable (generate),
-    calculateCommandStackMemoryRequirements,
+    calculateInstructionStackMemoryRequirements,
   )
-import Command (Command)
+import MachineInstruction (Instruction)
 import Data.Either (fromRight, isLeft, isRight)
 import Parser (Parseable (parse))
-import SyntaxTree (Command (Read), Program (..))
+import SyntaxTree (Instruction (Read), Program (..))
 import Test.Hspec (Spec, describe, it, shouldBe, shouldSatisfy)
 import Tokenizer (tokenize)
 
-unsafeParseCommand :: String -> SyntaxTree.Command
-unsafeParseCommand = fromRight (SyntaxTree.Read "") . parse . fromRight [] . tokenize
+unsafeParseInstruction :: String -> SyntaxTree.Instruction
+unsafeParseInstruction = fromRight (SyntaxTree.Read "") . parse . fromRight [] . tokenize
 
 unsafeParseProgram :: String -> Program
 unsafeParseProgram = fromRight (Program [] [] (SyntaxTree.Read "")) . parse . fromRight [] . tokenize
 
-unsafeGenerate :: String -> Either String [Command.Command]
+unsafeGenerate :: String -> Either String [MachineInstruction.Instruction]
 unsafeGenerate = generate . unsafeParseProgram
 
 spec :: Spec
 spec = do
   describe "helper function tests" $ do
-    describe "commands" $ do
-      it "can count simple command mem requirements correctly" $
+    describe "instructions" $ do
+      it "can count simple instruction mem requirements correctly" $
         do
-          calculateCommandStackMemoryRequirements
-            ( unsafeParseCommand
+          calculateInstructionStackMemoryRequirements
+            ( unsafeParseInstruction
                 "{ INT m \
                 \ m := 2 \
                 \ isprime := 1 \
@@ -35,28 +35,28 @@ spec = do
                 \ IF (n / m) * m = n THEN isprime := 0 \
                 \ m := m + 1 \
                 \ } }" ::
-                SyntaxTree.Command
+                SyntaxTree.Instruction
             )
             `shouldBe` 1
-          calculateCommandStackMemoryRequirements
-            ( unsafeParseCommand
+          calculateInstructionStackMemoryRequirements
+            ( unsafeParseInstruction
                 "{ INT m \
                 \ INT n }" ::
-                SyntaxTree.Command
+                SyntaxTree.Instruction
             )
             `shouldBe` 2
-          calculateCommandStackMemoryRequirements
-            ( unsafeParseCommand
+          calculateInstructionStackMemoryRequirements
+            ( unsafeParseInstruction
                 "{ }" ::
-                SyntaxTree.Command
+                SyntaxTree.Instruction
             )
             `shouldBe` 0
-      it "can calculate complicated command mem requirements correctly" $
+      it "can calculate complicated instruction mem requirements correctly" $
         do
-          calculateCommandStackMemoryRequirements (unsafeParseCommand "{INT m {INT n}}") `shouldBe` 2
-          calculateCommandStackMemoryRequirements (unsafeParseCommand "{{INT n} INT m}") `shouldBe` 1
-          calculateCommandStackMemoryRequirements (unsafeParseCommand "{INT m {INT n} INT l}") `shouldBe` 2
-          calculateCommandStackMemoryRequirements (unsafeParseCommand "{INT m {INT n INT k} INT l}") `shouldBe` 3
+          calculateInstructionStackMemoryRequirements (unsafeParseInstruction "{INT m {INT n}}") `shouldBe` 2
+          calculateInstructionStackMemoryRequirements (unsafeParseInstruction "{{INT n} INT m}") `shouldBe` 1
+          calculateInstructionStackMemoryRequirements (unsafeParseInstruction "{INT m {INT n} INT l}") `shouldBe` 2
+          calculateInstructionStackMemoryRequirements (unsafeParseInstruction "{INT m {INT n INT k} INT l}") `shouldBe` 3
 
   describe "compiling test programs" $ do
     it "can not compile illegalreference program" $ do

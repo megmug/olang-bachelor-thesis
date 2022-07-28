@@ -1,13 +1,13 @@
 module IntegrationSpec where
 
 import CodeGenerator (Generatable (generate))
-import Command (Command)
+import MachineInstruction (Instruction)
 import Control.DeepSeq (force)
 import Control.Exception (evaluate)
 import Data.Either (fromRight, isRight)
 import Machine (runTest)
 import Parser (Parseable (parse))
-import SyntaxTree (Command (Read), Program (..))
+import SyntaxTree (Instruction (Read), Program (..))
 import Test.Hspec
   ( Spec,
     anyArithException,
@@ -22,7 +22,7 @@ import Tokenizer (tokenize)
 unsafeParseProgram :: String -> Program
 unsafeParseProgram = fromRight (Program [] [] (SyntaxTree.Read "")) . parse . fromRight [] . tokenize
 
-unsafeGenerate :: String -> [Command.Command]
+unsafeGenerate :: String -> [MachineInstruction.Instruction]
 unsafeGenerate p = fromRight [] $ generate $ unsafeParseProgram p
 
 spec :: Spec
