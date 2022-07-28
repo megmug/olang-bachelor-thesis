@@ -112,12 +112,7 @@ controlComm e = do
 loadNextInstruction :: Computation ()
 loadNextInstruction = do
   pc <- use programcounter
-  prog <- use code
-  if isIndexForVector pc prog
-    then do
-      iregister .= prog V.! pc
-      programcounter += 1
-    else throwErr "program counter out of range!"
+  loadInstruction pc
 
 loadInstruction :: CodeAddress -> Computation ()
 loadInstruction a = do
