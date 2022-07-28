@@ -475,16 +475,19 @@ runTraceIO cs = do
   m <- case createMachine cs of
     Nothing -> error "invalid machine code"
     Just m -> return m
-  stepIOWithTraceUntilHalted m
+  stepIOWithTraceUntilHalted m 0
   where
-    stepIOWithTraceUntilHalted m = do
+    stepIOWithTraceUntilHalted m n = do
+      putStrLn ("Machine runtime: " ++ show n)
       print m
+      putStrLn ""
       m' <- stepIO m
       if isHalted m'
-        then do 
+        then do
+          putStrLn ("Machine runtime: " ++ show (n + 1))
           print m'
           return ()
-        else stepIOWithTraceUntilHalted m'
+        else stepIOWithTraceUntilHalted m' (n + 1)
 
 runInteractiveIO :: [Instruction] -> IO ()
 runInteractiveIO cs = do
