@@ -119,8 +119,8 @@ loadNextInstruction = do
       programcounter += 1
     else throwErr "program counter out of range!"
 
-jumpTo :: CodeAddress -> Computation ()
-jumpTo a = do
+loadInstruction :: CodeAddress -> Computation ()
+loadInstruction a = do
   prog <- use code
   if isIndexForVector a prog
     then do
@@ -139,7 +139,7 @@ conditionalJumpTo b a = do
         Nothing -> throwErr "value is not a bool"
         Just b' -> do
           if b == b'
-            then jumpTo a
+            then loadInstruction a
             else loadNextInstruction
           stack .= V.init sOld
 
@@ -318,7 +318,7 @@ step = do
           loadNextInstruction
           return Nothing
     Jump a -> do
-      jumpTo a
+      loadInstruction a
       return Nothing
     JumpIfFalse a -> do
       conditionalJumpTo False a
@@ -334,7 +334,7 @@ step = do
       pc <- use programcounter
       stack .= start V.++ V.fromList (map toInteger [b, pc]) V.++ params
       bregister .= V.length start
-      jumpTo a
+      loadInstruction a
       return Nothing
     CallMethod i' n -> do
       sOld <- use stack
@@ -358,7 +358,7 @@ step = do
       b <- use bregister
       stack .= start V.++ V.fromList (map toInteger [b, pc]) V.++ params
       bregister .= V.length start
-      jumpTo a
+      loadInstruction a
       return Nothing
     Return returnsSth -> do
       bOld <- use bregister
@@ -375,7 +375,7 @@ step = do
       bregister .= bNew
       -- jump back to return address
       let ra = fromInteger $ sOld V.! (bOld + 1) :: StackAddress
-      jumpTo ra
+      loadInstruction ra
       return Nothing
     CombineUnary Not -> do
       sOld <- use stack
