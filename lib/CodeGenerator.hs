@@ -4,7 +4,7 @@
 
 module CodeGenerator where
 
-import Command
+import MachineInstruction
   ( BinaryOperator
       ( Divide,
         Equals,
@@ -16,7 +16,7 @@ import Command
       ),
     ClassID,
     CodeAddress,
-    Command
+    Instruction
       ( AllocateHeap,
         CallMethod,
         CallProcedure,
@@ -166,19 +166,19 @@ classtablet f (TypeState st pt ct) = (\ct' -> TypeState st pt ct') <$> f ct
 
 -- ContextGeneratable is meant for syntactical elements that can be compiled, but need additional context information to the GenState alone
 class ContextGeneratable c a where
-  contextGenerator :: c -> a -> GeneratorAction [Command.Command]
+  contextGenerator :: c -> a -> GeneratorAction [Instruction]
 
 -- Generatable is for syntactical elements that can be compiled without additional context (apart from the GenState)
 class Generatable a where
   -- A generator creates a monadic action from a syntactical element that can generate code for it
-  generator :: a -> GeneratorAction [Command.Command]
+  generator :: a -> GeneratorAction [Instruction]
 
   -- This runs a generator with some supplied state (can also be useful for testing)
-  customGenerate :: a -> GenState -> Either String [Command.Command]
+  customGenerate :: a -> GenState -> Either String [Instruction]
   customGenerate e s = evalState (runExceptT $ generator e) s
 
   -- This runs a generator with some default empty state (mostly useful for whole programs)
-  generate :: a -> Either String [Command.Command]
+  generate :: a -> Either String [Instruction]
   generate e = customGenerate e $ GenState 0 [] [] []
 
 -- A small helper to output the generator state in case of failure
@@ -784,7 +784,7 @@ instance ContextGeneratable CommandContext SyntaxTree.Command where
       Just (SymbolEntry _ (OBJ _) _) -> throwE $ "type error: " ++ n ++ " is an object, can't read an integer into it"
       Just (SymbolEntry _ INT p) -> return p
     prefixlength += 2
-    return [Command.Read, StoreStack pos]
+    return [MachineInstruction.Read, StoreStack pos]
   contextGenerator _ (Block cs) = do
     -- save old symbol table for the reset after generating the commands - this implements scoping
     st <- use symtable
@@ -857,9 +857,9 @@ instance Generatable Condition where
     prefixlength += 1
     return newCmds
     where
-      conv SyntaxTree.Equals = Command.Equals
-      conv SyntaxTree.Smaller = Command.Smaller
-      conv SyntaxTree.Greater = Command.Greater
+      conv SyntaxTree.Equals = MachineInstruction.Equals
+      conv SyntaxTree.Smaller = MachineInstruction.Smaller
+      conv SyntaxTree.Greater = MachineInstruction.Greater
   generator (Negation c) = do
     cmds <- generator c
     let newCmds = cmds ++ [CombineUnary Not]
@@ -877,7 +877,7 @@ instance Generatable Expression where
         prefixlength += 1
         factorCommands <- generator t
         prefixlength += 1
-        return $ [PushInt 0] ++ factorCommands ++ [CombineBinary Command.Minus]
+        return $ [PushInt 0] ++ factorCommands ++ [CombineBinary MachineInstruction.Minus]
     tsCommands <- traverse stGenerator sts
     return $ firstFactorCommands ++ concat tsCommands
     where
@@ -886,8 +886,8 @@ instance Generatable Expression where
         prefixlength += 1
         let signCommand = [CombineBinary $ conv s']
         return $ tCommands ++ signCommand
-      conv SyntaxTree.Plus = Command.Plus
-      conv SyntaxTree.Minus = Command.Minus
+      conv SyntaxTree.Plus = MachineInstruction.Plus
+      conv SyntaxTree.Minus = MachineInstruction.Minus
 
 instance Typeable Expression where
   typifier (Expression ((_, t) :| ts)) = do
@@ -912,8 +912,8 @@ instance Generatable Term where
         prefixlength += 1
         let oCommand = [CombineBinary $ conv o]
         return $ fCommands ++ oCommand
-      conv SyntaxTree.Times = Command.Times
-      conv SyntaxTree.Divide = Command.Divide
+      conv SyntaxTree.Times = MachineInstruction.Times
+      conv SyntaxTree.Divide = MachineInstruction.Divide
 
 instance Typeable Term where
   typifier (Term f ofs) = do

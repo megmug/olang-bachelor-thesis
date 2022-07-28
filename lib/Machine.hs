@@ -2,11 +2,11 @@
 
 module Machine where
 
-import Command
+import MachineInstruction
   ( BinaryOperator (..),
     ClassID,
     CodeAddress,
-    Command (..),
+    Instruction (..),
     MethodID,
     StackAddress,
     UnaryOperator (..),
@@ -35,11 +35,11 @@ data Machine
       InputStream
   deriving (Eq)
 
-type Code = V.Vector Command
+type Code = V.Vector Instruction
 
 type Stack = V.Vector Integer
 
-type InstructionRegister = Command
+type InstructionRegister = Instruction
 
 type ProgramCounter = Int
 
@@ -193,10 +193,10 @@ boolToInteger :: Bool -> Integer
 boolToInteger False = 0
 boolToInteger True = 1
 
-createMachine :: [Command] -> Maybe Machine
+createMachine :: [Instruction] -> Maybe Machine
 createMachine cs = createMachineWithInput cs []
 
-createMachineWithInput :: [Command] -> InputStream -> Maybe Machine
+createMachineWithInput :: [Instruction] -> InputStream -> Maybe Machine
 createMachineWithInput [] _ = Nothing
 createMachineWithInput (c : cs) inputs = Just $ Machine (V.fromList (c : cs)) (V.fromList [0, 0]) c 1 0 0 M.empty [] inputs
 
@@ -422,13 +422,13 @@ step = do
 {--}
 
 {- Machine runner implementations for concrete computational contexts -}
-run :: [Command] -> IO ()
+run :: [Instruction] -> IO ()
 run = runDefaultIO
 
-runDebug :: [Command] -> IO ()
+runDebug :: [Instruction] -> IO ()
 runDebug = runInteractiveIO
 
-runTrace :: [Command] -> IO ()
+runTrace :: [Instruction] -> IO ()
 runTrace = runTraceIO
 
 stepTest :: Machine -> Either String (String, Machine)
@@ -450,7 +450,7 @@ stepIO m = do
       putStr s
       return m'
 
-runTest :: [Command] -> InputStream -> Either String String
+runTest :: [Instruction] -> InputStream -> Either String String
 runTest cs s = case createMachineWithInput cs s of
   Nothing -> Left "invalid machine code"
   Just m -> runAccumulatingOutput m ""
@@ -462,7 +462,7 @@ runTest cs s = case createMachineWithInput cs s of
           then Right $ s' ++ out
           else runAccumulatingOutput m' (s' ++ out)
 
-runDefaultIO :: [Command] -> IO ()
+runDefaultIO :: [Instruction] -> IO ()
 runDefaultIO cs = do
   m <- case createMachine cs of
     Nothing -> error "invalid machine code"
@@ -476,7 +476,7 @@ runDefaultIO cs = do
         then return ()
         else stepIOUntilHalted m'
 
-runTraceIO :: [Command] -> IO ()
+runTraceIO :: [Instruction] -> IO ()
 runTraceIO cs = do
   m <- case createMachine cs of
     Nothing -> error "invalid machine code"
@@ -492,7 +492,7 @@ runTraceIO cs = do
           return ()
         else stepIOWithTraceUntilHalted m'
 
-runInteractiveIO :: [Command] -> IO ()
+runInteractiveIO :: [Instruction] -> IO ()
 runInteractiveIO cs = do
   m <- case createMachine cs of
     Nothing -> error "invalid machine code"

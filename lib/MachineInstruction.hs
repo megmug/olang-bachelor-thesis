@@ -1,4 +1,4 @@
-module Command where
+module MachineInstruction where
 
 -- A code address represents an index into the code segment of the machine
 type CodeAddress = Int
@@ -16,7 +16,7 @@ type ClassID = Int
 
 type MethodID = Int
 
-data Command
+data Instruction
   = {- Reset the machine into its initial state, with empty stack, heap and method table -}
     Reset
   | {- Push value from specified address (relative to stack frame base) to stack
@@ -97,7 +97,7 @@ data Command
                 - Base address register is overridden with new base address
     -}
     CallMethod MethodID Int
-  | {- Return b: Return from the procedure, jumping back to the return address, popping the current stack frame and, depending on b, possibly returning a return value
+  | {- Return b: Return from the procedure, jumping back to the return address, popping the current stack frame and, depending on b, possibly returning a value
        Requires: - Stack frame has a valid return address a and stack frame base address b
                  - Depending on b, return value may be needed on top of stack
        Ensures: - Program jumps to a
