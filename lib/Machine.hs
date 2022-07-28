@@ -142,9 +142,8 @@ conditionalJumpTo b a = do
 
 {- Utility functions -}
 instance Show Machine where
-  show (Machine c s i pc b o h mts input) =
-    "Machine state:\nCode segment: "
-      ++ customShow c
+  show (Machine _ s i pc b o h mts input) =
+    "Machine state:"
       ++ "\nStack: "
       ++ show s
       ++ "\nInstruction register: "
