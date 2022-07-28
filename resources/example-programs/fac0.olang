@@ -1,0 +1,18 @@
+DO {
+    PRINTS "Please enter a natural number n: "
+    INT n
+    READ n
+    INT faculty
+    faculty := 1
+    IF n < 0 THEN {
+        PRINTI n
+        PRINTLNS " is not a natural number!"
+        ERROR
+    }
+    WHILE n > 0 DO {
+        faculty := faculty * n
+        n := n - 1
+    }
+    PRINTS "n! = "
+    PRINTI faculty
+}
