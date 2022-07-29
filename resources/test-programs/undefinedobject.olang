@@ -1,0 +1,26 @@
+USING [
+    CLASS Intbox(INT i)
+    FIELDS INT i
+    INIT { this.i := i }
+    [
+        METHOD print() {
+            PRINTI this.i
+        }
+    ]
+
+    CLASS EmptyBox()
+    FIELDS OBJ Intbox b
+    INIT { PRINTLNS "" }
+    [
+        METHOD print() {
+            PRINTLNS "ERROR!"
+        }
+    ]
+] DO {
+    OBJ EmptyBox b
+    b := EmptyBox()
+
+    OBJ Intbox i
+    i := b.b
+    CALL i.print()
+}
