@@ -561,7 +561,13 @@ instance ContextGeneratable ProcKind ProcedureDeclaration where
                 ct <- use classtable
                 case lookupClassByName s ct of
                   Nothing -> throwE "BUG encountered: initializer with invalid return type!"
-                  Just (cid, ClassEntry _ _ ft _) -> return [AllocateHeap (length ft) cid, StoreStack p]
+                  -- generate heap allocation instructions, along with instructions to correctly initialize all fields
+                  Just (cid, ClassEntry _ _ ft _) -> do
+                    let fieldInitCmds = concatMap inits ft
+                    prefixlength += length fieldInitCmds
+                    return $ [AllocateHeap (length ft) cid, StoreStack p] ++ fieldInitCmds
+                    where inits (FieldEntry _ (OBJ _) heapFrameIndex) = [LoadStack p, PushInt (-1), StoreHeap heapFrameIndex]
+                          inits (FieldEntry _ INT heapFrameIndex) = [LoadStack p, PushInt 0, StoreHeap heapFrameIndex]
       _ -> return []
     -- generate the instructions
     procedureInstructions <- contextGenerator PROCEDURE c
