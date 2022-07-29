@@ -1,0 +1,21 @@
+USING [
+    PROCEDURE fac(INT n) RETURNS INT faculty {
+        IF n < 0 THEN {
+            PRINTI n
+            PRINTLNS " is not a natural number!"
+            ERROR
+        }
+        IF n = 0 THEN {
+            faculty := 1
+        }
+        IF n > 0 THEN {
+            faculty := n * fac(n - 1)
+        }
+    }
+] DO {
+    PRINTS "Please enter a natural number n: "
+    INT n
+    READ n
+    PRINTS "n! = "
+    PRINTI fac(n)
+}
