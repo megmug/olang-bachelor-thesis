@@ -41,7 +41,7 @@ data Instruction
     -}
     LoadHeap HeapFrameIndex
   | {- StoreHeap i: Store value from top of stack to heap address saved below the top at field i
-       Requires: Second top stack element of stack is a valid heap address (called a)
+       Requires: Second top stack element is a valid heap address (called a)
        Ensures: - Old top and second top elements are popped from the stack
                 - Old top of stack value is now stored at heap address a at index i
     -}
