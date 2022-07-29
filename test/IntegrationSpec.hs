@@ -15,7 +15,7 @@ import Test.Hspec
     it,
     shouldBe,
     shouldSatisfy,
-    shouldThrow,
+    shouldThrow, anyException,
   )
 import Tokenizer (tokenize)
 
@@ -47,3 +47,8 @@ spec = do
       divSource <- readFile "resources/test-programs/divzero.olang"
       let divProgram = unsafeGenerate divSource
       (evaluate . force) (runTest divProgram []) `shouldThrow` anyArithException
+    
+    it "running the undefined object field program should throw a null pointer exception" $ do
+      source <- readFile "resources/test-programs/undefinedobject.olang"
+      let prog = unsafeGenerate source
+      (evaluate . force) (runTest prog []) `shouldThrow` anyException
