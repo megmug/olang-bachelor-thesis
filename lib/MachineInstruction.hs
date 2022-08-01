@@ -9,8 +9,8 @@ type StackAddress = Int
 -- A heap address represents an index into the machine's heap
 type HeapAddress = Int
 
--- A head index represents an index into a heap frame / heap memory buffer
-type HeapFrameIndex = Int
+-- A field index represents an index into an object's fields on the heap
+type FieldIndex = Int
 
 type ClassID = Int
 
@@ -34,13 +34,13 @@ data Instruction
   {- Push specified integer onto the stack
        Ensures: Specified integer is pushed onto the stack
   -}
-  | LoadHeap HeapFrameIndex
+  | LoadHeap FieldIndex
   {- LoadHeap i: Push value from heap address stored at top of stack at index i
        Requires: Top of stack represents a valid heap address (called a)
        Ensures: - Old top of stack value is popped from the stack
                 - Value at heap address a and heap frame index i is pushed onto the stack
   -}
-  | StoreHeap HeapFrameIndex
+  | StoreHeap FieldIndex
   {- StoreHeap i: Store value from top of stack to heap address saved below the top at field i
        Requires: Second top stack element is a valid heap address (called a)
        Ensures: - Old top and second top elements are popped from the stack
