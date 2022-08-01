@@ -1,0 +1,20 @@
+DO {
+    PRINTLNS "I will now begin listing some primes"
+    INT n
+    n := 2
+    WHILE n < 6 DO {
+        INT m
+        INT isprime
+        m := 2
+        isprime := 1
+        WHILE m < n DO {
+                IF (n / m) * m = n THEN isprime := 0
+                m := m + 1
+        }
+        IF NOT isprime = 0 THEN {
+            PRINTI n
+            PRINTLNS ""
+        }
+        n := n + 1
+    }
+}

@@ -59,12 +59,28 @@ spec = do
           calculateInstructionStackMemoryRequirements (unsafeParseInstruction "{INT m {INT n INT k} INT l}") `shouldBe` 3
 
   describe "compiling test programs" $ do
+    it "can compile divzero program" $ do
+      prog <- readFile "resources/test-programs/divzero.olang"
+      unsafeGenerate prog `shouldSatisfy` isRight
+
     it "can not compile illegalreference program" $ do
       prog <- readFile "resources/test-programs/illegalreference.olang"
       unsafeGenerate prog `shouldSatisfy` isLeft
 
-    it "can compile divzero program" $ do
-      prog <- readFile "resources/test-programs/divzero.olang"
+    it "can compile primes-bounded program" $ do
+      prog <- readFile "resources/test-programs/primes-bounded.olang"
+      unsafeGenerate prog `shouldSatisfy` isRight
+
+    it "can compile this-shadow-by-return-param program" $ do
+      prog <- readFile "resources/test-programs/this-shadow-by-return-param.olang"
+      unsafeGenerate prog `shouldSatisfy` isRight
+
+    it "can compile undefinedobject program" $ do
+      prog <- readFile "resources/test-programs/undefinedobject.olang"
+      unsafeGenerate prog `shouldSatisfy` isRight
+
+    it "can compile uninitializedreturnparameter program" $ do
+      prog <- readFile "resources/test-programs/uninitializedreturnparameter.olang"
       unsafeGenerate prog `shouldSatisfy` isRight
 
   describe "compiling example programs" $ do
@@ -76,10 +92,54 @@ spec = do
       prog <- readFile "resources/example-programs/animals.olang"
       unsafeGenerate prog `shouldSatisfy` isRight
 
+    it "can compile animals-procedures program" $ do
+      prog <- readFile "resources/example-programs/animals-procedures.olang"
+      unsafeGenerate prog `shouldSatisfy` isRight
+
+    it "can compile expression program" $ do
+      prog <- readFile "resources/example-programs/expression.olang"
+      unsafeGenerate prog `shouldSatisfy` isRight
+
+    it "can compile fac0 program" $ do
+      prog <- readFile "resources/example-programs/fac0.olang"
+      unsafeGenerate prog `shouldSatisfy` isRight
+
+    it "can compile fac1 program" $ do
+      prog <- readFile "resources/example-programs/fac1.olang"
+      unsafeGenerate prog `shouldSatisfy` isRight
+
+    it "can compile fac2 program" $ do
+      prog <- readFile "resources/example-programs/fac2.olang"
+      unsafeGenerate prog `shouldSatisfy` isRight
+
+    it "can compile fractran program" $ do
+      prog <- readFile "resources/example-programs/fractran.olang"
+      unsafeGenerate prog `shouldSatisfy` isRight
+
+    it "can compile hello program" $ do
+      prog <- readFile "resources/example-programs/hello.olang"
+      unsafeGenerate prog `shouldSatisfy` isRight
+
+    it "can compile intbox0 program" $ do
+      prog <- readFile "resources/example-programs/intbox0.olang"
+      unsafeGenerate prog `shouldSatisfy` isRight
+
+    it "can compile intbox1 program" $ do
+      prog <- readFile "resources/example-programs/intbox1.olang"
+      unsafeGenerate prog `shouldSatisfy` isRight
+
+    it "can compile intbox2 program" $ do
+      prog <- readFile "resources/example-programs/intbox2.olang"
+      unsafeGenerate prog `shouldSatisfy` isRight
+
     it "can compile primes program" $ do
       prog <- readFile "resources/example-programs/primes.olang"
       unsafeGenerate prog `shouldSatisfy` isRight
 
     it "can compile rational program" $ do
       prog <- readFile "resources/example-programs/rational.olang"
+      unsafeGenerate prog `shouldSatisfy` isRight
+
+    it "can compile sum program" $ do
+      prog <- readFile "resources/example-programs/sum.olang"
       unsafeGenerate prog `shouldSatisfy` isRight

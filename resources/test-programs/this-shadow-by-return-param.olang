@@ -1,0 +1,19 @@
+USING [
+    CLASS Intbox(INT i)
+    FIELDS INT i
+    INIT { this.i := i }
+    [
+        METHOD print() {
+            PRINTI this.i
+        }
+
+        METHOD modPrint() RETURNS OBJ Intbox this {
+            PRINTI this.i
+        }
+    ]
+] DO {
+    OBJ Intbox b
+    b := Intbox(1)
+
+    b := b.modPrint()
+}
