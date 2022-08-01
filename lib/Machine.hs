@@ -47,9 +47,9 @@ type BaseAddressRegister = Int
 
 type ObjectCounter = Int
 
-type Heap = M.IntMap HeapEntry
+type Heap = M.IntMap Object
 
-data HeapEntry = HeapEntry ClassID (V.Vector Integer) deriving (Eq, Show)
+data Object = OBJ ClassID (V.Vector Integer) deriving (Eq, Show)
 
 type RefCounter = Int
 
@@ -253,7 +253,7 @@ step = do
           h <- use heap
           case M.lookup heapAddr h of
             Nothing -> throwErr "LoadHeap: heap address out of range!"
-            Just (HeapEntry _ fs) -> do
+            Just (OBJ _ fs) -> do
               if isIndexForVector a fs
                 then do
                   let val = fs V.! a
@@ -271,11 +271,11 @@ step = do
           h <- use heap
           case M.lookup heapAddr h of
             Nothing -> throwErr "StoreHeap: heap address out of range"
-            Just (HeapEntry cid fs) -> do
+            Just (OBJ cid fs) -> do
               if isIndexForVector hi fs
                 then do
                   let fsNew = V.update fs (V.fromList [(hi, val)])
-                  let heapEntryNew = HeapEntry cid fsNew
+                  let heapEntryNew = OBJ cid fsNew
                   heap .= M.adjust (const heapEntryNew) heapAddr h
                   stack .= V.init (V.init sOld)
                   loadNextInstruction
@@ -287,7 +287,7 @@ step = do
         Nothing -> throwErr "AllocateHeap: referenced a non-existing class"
         Just _ -> do
           let fieldsNew = V.fromList (replicate n 0)
-          let heapEntryNew = HeapEntry cid fieldsNew
+          let heapEntryNew = OBJ cid fieldsNew
           key <- use ocounter
           h <- use heap
           heap .= M.insert key heapEntryNew h
@@ -332,7 +332,7 @@ step = do
       h <- use heap
       a <- case M.lookup objAddr h of
         Nothing -> throwErr "CallMethod: heap address out of range"
-        Just (HeapEntry cid _) -> do
+        Just (OBJ cid _) -> do
           mts <- use mtables
           case lookup cid mts of
             Nothing -> throwErr "CallMethod: referenced invalid class"
