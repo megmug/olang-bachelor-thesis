@@ -779,7 +779,7 @@ instance ContextGeneratable InstructionContext SyntaxTree.Instruction where
     st <- use symtable
     symtable .= addSymbol st n INT
     st' <- use symtable
-    -- look up position of new symbol
+    -- lookup position of new symbol
     pos <- case lookupSymbol st' n of
       Nothing -> throwE "BUG encountered: impossibly, the symbol we just added vanished"
       Just (SymbolEntry _ _ p) -> return p
