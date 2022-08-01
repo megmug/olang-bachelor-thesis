@@ -499,7 +499,7 @@ instance ContextGeneratable ClassID MethodDeclaration where
     proctable .= oldpt
     {- Return generated procedure code -}
     newPrefix <- use prefixlength
-    return $ [Jump newPrefix] ++ concat subProcedureInstructions ++ stackMemoryAllocationInstructions ++ methodInstructions ++ returnInstructions
+    return $ [Jump newPrefix] ++ concat subProcedureInstructions ++ stackMemoryAllocationInstructions ++ returnParameterInitInstructions ++ methodInstructions ++ returnInstructions
     where
       updateClassTableWithNewMethod :: ClassID -> ProcEntry -> GeneratorAction ()
       updateClassTableWithNewMethod cid' pe@(ProcEntry s _) = do
