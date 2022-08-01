@@ -17,9 +17,7 @@ type ClassID = Int
 type MethodID = Int
 
 data Instruction
-  = Reset
-    {- Reset the machine into its initial state, with empty stack, heap and method table -}
-  | LoadStack StackAddress
+  = LoadStack StackAddress
     {- Push value from specified address (relative to stack frame base) to stack
        Requires: Address is a valid relative address
        Ensures: Value is pushed onto the stack

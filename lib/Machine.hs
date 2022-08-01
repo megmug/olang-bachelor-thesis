@@ -219,13 +219,6 @@ step :: Computation (Maybe String)
 step = do
   i <- use iregister
   case i of -- to understand the code better, look at the informal semantics in MachineInstruction.hs
-    Reset -> do
-      stack .= V.fromList [0, 0]
-      bregister .= 0
-      ocounter .= 0
-      heap .= M.empty
-      loadNextInstruction
-      return Nothing
     LoadStack n -> do
       sOld <- use stack
       b <- use bregister
