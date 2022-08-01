@@ -452,7 +452,7 @@ instance ContextGeneratable ClassID MethodDeclaration where
     let params =
           thisParam : case mrp of
             Nothing -> pl
-            Just rp -> if rp `elem` pl then pl else pl ++ [rp]
+            Just rp -> if rp `elem` pl || rp == thisParam then pl else pl ++ [rp]
     st <- use symtable
     symtable .= addParamsToSymbols st params
     stWithParams <- use symtable
@@ -467,6 +467,22 @@ instance ContextGeneratable ClassID MethodDeclaration where
       let stackMemoryRequirements = localVariableMemoryRequirements + returnParameterMemoryRequirements
       prefixlength += stackMemoryRequirements
       return $ replicate stackMemoryRequirements (PushInt 0)
+    -- Generate memory init instructions for return parameter, if present, of type OBJ _ and not in param list or "this"
+    returnParameterInitInstructions <- do
+      case mrp of
+        Nothing -> return []
+        Just (IntDeclaration _) -> return [] -- Int return parameter doesn't need to be initialized b.c. it is already 0
+        Just rp@(ObjectDeclaration (Object _ p)) -> do
+          ct' <- use symtable
+          case lookupSymbol ct' p of
+            Nothing -> throwDiagnosticError "BUG encountered: return parameter missing from symbols!"
+            Just (SymbolEntry _ _ pos) ->
+              if rp `elem` pl || rp == thisParam
+                then return []
+                else do -- generate init instructions for return symbol
+                prefixlength += 2
+                return [PushInt (-1), StoreStack pos]
+    -- Generate instructions for the method itself
     methodInstructions <- contextGenerator METHOD c
     {- Create necessary instructions for return -}
     returnInstructions <- case mrp of
@@ -546,6 +562,21 @@ instance ContextGeneratable ProcKind ProcedureDeclaration where
       let stackMemoryRequirements = localVariableMemoryRequirements + returnParameterMemoryRequirements
       prefixlength += stackMemoryRequirements
       return $ replicate stackMemoryRequirements (PushInt 0)
+    -- Generate memory init instructions for return parameter, if present, of type OBJ _ and not in param list
+    returnParameterInitInstructions <- do
+      case mrp of
+        Nothing -> return []
+        Just (IntDeclaration _) -> return [] -- Int return parameter doesn't need to be initialized b.c. it is already 0
+        Just rp@(ObjectDeclaration (Object _ p)) -> do
+          ct' <- use symtable
+          case lookupSymbol ct' p of
+            Nothing -> throwDiagnosticError "BUG encountered: return parameter missing from symbols!"
+            Just (SymbolEntry _ _ pos) ->
+              if rp `elem` pl
+                then return []
+                else do -- generate init instructions for return symbol
+                prefixlength += 2
+                return [PushInt (-1), StoreStack pos]
     -- IF INIT procedure: generate memory allocation instructions and update prefix accordingly
     heapMemoryAllocationInstructions <- case kind of
       INIT -> do
@@ -585,7 +616,7 @@ instance ContextGeneratable ProcKind ProcedureDeclaration where
     proctable .= newProcEntry : pt
     {- Return generated procedure code -}
     newPrefix <- use prefixlength
-    return $ [Jump newPrefix] ++ concat subProcedureInstructions ++ stackMemoryAllocationInstructions ++ heapMemoryAllocationInstructions ++ procedureInstructions ++ returnInstructions
+    return $ [Jump newPrefix] ++ concat subProcedureInstructions ++ stackMemoryAllocationInstructions ++ returnParameterInitInstructions ++ heapMemoryAllocationInstructions ++ procedureInstructions ++ returnInstructions
 
 instance Generatable Call where
   generator (SymbolReference (NameReference n)) = do
