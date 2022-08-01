@@ -33,7 +33,6 @@ import MachineInstruction
         PrintStrLn,
         PushInt,
         Read,
-        Reset,
         Return,
         StoreHeap,
         StoreStack
@@ -373,7 +372,7 @@ instance Generatable Program where
   generator (Program classes procs c) = do
     let numMethodTables = length classes
     -- There is 1 jump and additionally 1 method table creation instruction for every class at the start of the program
-    prefixlength += 1 + numMethodTables
+    prefixlength += numMethodTables
     classInstructions <- traverse generator classes
     procInstructions <- traverse (contextGenerator NORMAL) procs
     -- reserve stack memory for variable declarations in main program
@@ -381,7 +380,7 @@ instance Generatable Program where
     prefixlength += length mainStackMemoryAllocationInstructions
     mainProgram <- contextGenerator MAIN c
     ct <- use classtable
-    let programInstructions = [Reset] ++ getMTables ct ++ concat classInstructions ++ concat procInstructions ++ mainStackMemoryAllocationInstructions ++ mainProgram ++ [Halt]
+    let programInstructions = getMTables ct ++ concat classInstructions ++ concat procInstructions ++ mainStackMemoryAllocationInstructions ++ mainProgram ++ [Halt]
     {- set state accordingly (not strictly necessary, but for sake of consistency with other generators, we do it none the less) -}
     prefixlength .= length programInstructions
     symtable .= []
