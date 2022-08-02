@@ -447,7 +447,7 @@ instance ContextGeneratable ClassID MethodDeclaration where
     {- Insert object, parameters and return parameter into symbol table -}
     ct <- use classtable
     thisParam <- case lookup cid ct of
-      Nothing -> throwE "BUG encountered: method has no corresponding class!"
+      Nothing -> throwDiagnosticError "BUG encountered: method has no corresponding class!"
       Just (ClassEntry cn _ _ _) -> return $ ObjectDeclaration $ Object cn "this"
     let params =
           thisParam : case mrp of
@@ -488,7 +488,7 @@ instance ContextGeneratable ClassID MethodDeclaration where
     returnInstructions <- case mrp of
       Nothing -> return [Return False]
       Just rp -> case lookupSymbol stWithParams (getSymbolDeclName rp) of
-        Nothing -> throwE "BUG encountered: return parameter missing from symbols!"
+        Nothing -> throwDiagnosticError "BUG encountered: return parameter missing from symbols!"
         Just (SymbolEntry _ _ p) -> return [LoadStack p, Return True]
     -- Update prefix
     prefixlength += length returnInstructions
