@@ -586,7 +586,7 @@ instance ContextGeneratable ProcKind ProcedureDeclaration where
           Just rp -> case lookupSymbol stWithParams (getSymbolDeclName rp) of
             Nothing -> throwE "BUG encountered: return parameter missing from symbols!"
             Just (SymbolEntry _ t p) -> case t of
-              INT -> throwE "BUG encountered: initializer with VAR return value!"
+              INT -> throwE "BUG encountered: initializer with INT return value!"
               OBJ s -> do
                 ct <- use classtable
                 case lookupClassByName s ct of
