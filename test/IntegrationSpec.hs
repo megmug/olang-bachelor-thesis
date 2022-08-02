@@ -4,7 +4,7 @@ import CodeGenerator (Generatable (generate))
 import MachineInstruction (Instruction)
 import Control.DeepSeq (force)
 import Control.Exception (evaluate)
-import Data.Either (fromRight, isRight)
+import Data.Either (fromRight)
 import Machine (runTest)
 import Parser (Parseable (parse))
 import SyntaxTree (Instruction (Read), Program (..))
@@ -14,7 +14,6 @@ import Test.Hspec
     describe,
     it,
     shouldBe,
-    shouldSatisfy,
     shouldThrow, anyException,
   )
 import Tokenizer (tokenize)
