@@ -113,15 +113,14 @@ instance Show Machine where
       ++ "\nInput stream: "
       ++ show input
 
---{- Utility code for displaying machine traces in latex tables for the bachelor thesis paper
+{- Utility code for displaying machine traces in latex tables for the bachelor thesis paper
 data LatexShowMode = CORE | PROC | FULL
 
 showLatexTableRow :: LatexShowMode -> Int -> Machine -> String
 showLatexTableRow CORE stepnum (Machine _ s i pc _ _ _ _ _) = show stepnum ++ " & " ++ show pc ++ " & \\haskell{" ++ show i ++ "} & \\haskell{" ++ show s ++ "} " ++ "\\tabularnewline \\hline"
 showLatexTableRow PROC stepnum (Machine _ s i pc b _ _ _ _) = show stepnum ++ " & " ++ show pc ++ " & \\haskell{" ++ show i ++ "} & \\haskell{" ++ show s ++ "} & " ++ show b ++ " \\tabularnewline \\hline"
 showLatexTableRow FULL stepnum (Machine _ s i pc b oc h mt _) = show stepnum ++ " & " ++ show pc ++ " & \\haskell{" ++ show i ++ "} & \\haskell{" ++ show s ++ "} & " ++ show b ++ " & \\haskell{" ++ show mt ++ "} & \\haskell{" ++ drop 9 (show h) ++ "} & " ++ show oc ++ " \\tabularnewline \\hline"
-
----}
+-}
 
 -- Show a code segment with position markings
 customShow :: Code -> String
@@ -614,16 +613,16 @@ runTraceIO cs = do
   stepIOWithTraceUntilHalted m 0
   where
     stepIOWithTraceUntilHalted m n = do
-      --putStrLn ("Machine runtime: " ++ show n)
-      --print m
-      putStrLn $ showLatexTableRow FULL n m
-      --putStrLn ""
+      putStrLn ("Machine runtime: " ++ show n)
+      print m
+      --putStrLn $ showLatexTableRow FULL n m
+      putStrLn ""
       m' <- stepIO m
       if isHalted m'
         then do
-          --putStrLn ("Machine runtime: " ++ show (n + 1))
-          --print m'
-          putStrLn $ showLatexTableRow FULL (n + 1) m'
+          putStrLn ("Machine runtime: " ++ show (n + 1))
+          print m'
+          --putStrLn $ showLatexTableRow FULL (n + 1) m'
           return ()
         else stepIOWithTraceUntilHalted m' (n + 1)
 
