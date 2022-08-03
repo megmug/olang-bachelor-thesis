@@ -358,7 +358,7 @@ step = do
       push (read $ head inputs :: Integer)
       loadNextInstruction
       return Nothing
-    {- PrintInt: Pop the stack's topmost value, and print it to the environment's output
+    {- PrintInt: Pop the stack's topmost value and print it to the environment's output
        Effect:
         print pop
         loadNextInstruction
