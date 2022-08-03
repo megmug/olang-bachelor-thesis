@@ -2,22 +2,21 @@
 
 module Machine where
 
+import Control.Lens (set, use, view, (+=), (.=))
+import Control.Monad (replicateM, when)
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Except (Except, runExcept, throwE)
+import Control.Monad.Trans.State (StateT (runStateT), get)
+import qualified Data.IntMap as M
+import qualified Data.Vector as V
 import MachineInstruction
   ( BinaryOperator (..),
     ClassID,
     CodeAddress,
     Instruction (..),
     MethodID,
-    StackAddress,
     UnaryOperator (..),
   )
-import Control.Lens (set, use, view, (+=), (.=))
-import Control.Monad (unless, when)
-import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Except (Except, runExcept, throwE)
-import Control.Monad.Trans.State (StateT (runStateT), get)
-import qualified Data.IntMap as M
-import qualified Data.Vector as V
 
 {-# ANN module ("hlint: ignore Avoid lambda") #-}
 
@@ -50,8 +49,6 @@ type ObjectCounter = Int
 type Heap = M.IntMap Object
 
 data Object = OBJ ClassID (V.Vector Integer) deriving (Eq, Show)
-
-type RefCounter = Int
 
 type MethodTables = [(ClassID, MethodTable)]
 
@@ -95,51 +92,6 @@ instream f (Machine c s i pc b o h mts input) = (\input' -> Machine c s i pc b o
 
 {--}
 
-{- Commonly used state computations -}
-throwErr :: String -> Computation a
-throwErr e = do
-  lift $ throwE e
-
-throwDiagnosticErr :: String -> Computation a
-throwDiagnosticErr e = do
-  m <- get
-  lift $ throwE $ e ++ "\n" ++ show m
-
-controlComm :: String -> Computation a
-controlComm e = do
-  lift $ throwE $ "CONTROL: " ++ e
-
-loadNextInstruction :: Computation ()
-loadNextInstruction = do
-  pc <- use programcounter
-  loadInstruction pc
-
-loadInstruction :: CodeAddress -> Computation ()
-loadInstruction a = do
-  prog <- use code
-  if isIndexForVector a prog
-    then do
-      iregister .= prog V.! a
-      programcounter .= a + 1
-    else throwErr "code address out of range"
-
-conditionalJumpTo :: Bool -> CodeAddress -> Computation ()
-conditionalJumpTo b a = do
-  sOld <- use stack
-  if null sOld
-    then throwErr "stack address out of range"
-    else do
-      let val = V.last sOld
-      case integerToBool val of
-        Nothing -> throwErr "value is not a bool"
-        Just b' -> do
-          if b == b'
-            then loadInstruction a
-            else loadNextInstruction
-          stack .= V.init sOld
-
-{--}
-
 {- Utility functions -}
 instance Show Machine where
   show (Machine _ s i pc b o h mts input) =
@@ -160,6 +112,16 @@ instance Show Machine where
       ++ show mts
       ++ "\nInput stream: "
       ++ show input
+
+--{- Utility code for displaying machine traces in latex tables for the bachelor thesis paper
+data LatexShowMode = CORE | PROC | FULL
+
+showLatexTableRow :: LatexShowMode -> Int -> Machine -> String
+showLatexTableRow CORE stepnum (Machine _ s i pc _ _ _ _ _) = show stepnum ++ " & " ++ show pc ++ " & \\haskell{" ++ show i ++ "} & \\haskell{" ++ show s ++ "} " ++ "\\tabularnewline \\hline"
+showLatexTableRow PROC stepnum (Machine _ s i pc b _ _ _ _) = show stepnum ++ " & " ++ show pc ++ " & \\haskell{" ++ show i ++ "} & \\haskell{" ++ show s ++ "} & " ++ show b ++ " \\tabularnewline \\hline"
+showLatexTableRow FULL stepnum (Machine _ s i pc b oc h mt _) = show stepnum ++ " & " ++ show pc ++ " & \\haskell{" ++ show i ++ "} & \\haskell{" ++ show s ++ "} & " ++ show b ++ " & \\haskell{" ++ show mt ++ "} & \\haskell{" ++ drop 9 (show h) ++ "} & " ++ show oc ++ " \\tabularnewline \\hline"
+
+---}
 
 -- Show a code segment with position markings
 customShow :: Code -> String
@@ -211,204 +173,385 @@ combineBinary op n m = case op of
 
 {--}
 
+{- Commonly used state computations -}
+throwDiagnosticError :: String -> Computation a
+throwDiagnosticError e = do
+  m <- get
+  lift $ throwE $ e ++ "\n" ++ show m
+
+controlComm :: String -> Computation a
+controlComm e = do
+  lift $ throwE $ "CONTROL: " ++ e
+
+loadNextInstruction :: Computation ()
+loadNextInstruction = do
+  pc <- use programcounter
+  loadInstruction pc
+
+loadInstruction :: CodeAddress -> Computation ()
+loadInstruction a = do
+  prog <- use code
+  if isIndexForVector a prog
+    then do
+      iregister .= prog V.! a
+      programcounter .= a + 1
+    else throwDiagnosticError "code address out of range"
+
+push :: Integer -> Computation ()
+push n = do
+  s <- use stack
+  stack .= V.snoc s n
+
+pop :: Computation Integer
+pop = do
+  s <- use stack
+  case V.unsnoc s of
+    Nothing -> throwDiagnosticError "stack is empty on pop"
+    Just (bottom, top) -> do
+      stack .= bottom
+      return top
+
+popFrame :: Computation ()
+popFrame = do
+  s <- use stack
+  b <- use bregister
+  bNew <- stackGet b
+  stack .= V.take b s
+  bregister .= fromInteger bNew
+
+stackGet :: Int -> Computation Integer
+stackGet a = do
+  s <- use stack
+  if isIndexForVector a s
+    then return (s V.! a)
+    else throwDiagnosticError "stack address out of range!"
+
+stackSet :: Int -> Integer -> Computation ()
+stackSet a e = do
+  s <- use stack
+  if isIndexForVector a s
+    then stack .= V.update s (V.fromList [(a, e)])
+    else throwDiagnosticError "stack address out of range!"
+
+heapGetObj :: Int -> Computation Object
+heapGetObj a = do
+  h <- use heap
+  case M.lookup a h of
+    Nothing -> throwDiagnosticError "heap address out of range!"
+    Just o -> return o
+
+heapSetObj :: Int -> Object -> Computation ()
+heapSetObj a o = do
+  h <- use heap
+  heap .= M.insert a o h
+
+heapSetField :: Int -> Int -> Integer -> Computation ()
+heapSetField a i val = do
+  (OBJ cid fs) <- heapGetObj a
+  if isIndexForVector i fs
+    then heapSetObj a (OBJ cid (V.update fs (V.fromList [(i, val)])))
+    else throwDiagnosticError "field index out of range!"
+
+lookupMethod :: Int -> Int -> Computation CodeAddress
+lookupMethod cid mid = do
+  mtt <- use mtables
+  case lookup cid mtt of
+    Nothing -> throwDiagnosticError "referenced invalid class"
+    Just mt -> case lookup mid mt of
+      Nothing -> throwDiagnosticError "referenced invalid method"
+      Just a -> return a
+{--}
+
 {- Core stepper computation
  - This is independent from a concrete computational context like IO to keep things modular
- - The computation will take in inputs through its input stream and output messages as a result of the computation
+ - Through the environment, the computation will take in inputs through its input stream and output messages as a result of the computation
  -}
 step :: Computation (Maybe String)
 step = do
-  i <- use iregister
-  case i of -- to understand the code better, look at the informal semantics in MachineInstruction.hs
-    LoadStack n -> do
-      sOld <- use stack
-      b <- use bregister
-      let symAddr = b + 2 + n -- we need the 2 to offset for base and return address on stack
-      if isIndexForVector symAddr sOld
-        then do
-          stack .= V.snoc sOld (sOld V.! symAddr)
-          loadNextInstruction
-          return Nothing
-        else throwErr "LoadStack: stack address out of range!"
-    StoreStack n -> do
-      sOld <- use stack
-      b <- use bregister
-      let symAddr = b + 2 + n -- we need the 2 to offset for base and return address on stack
-      if isIndexForVector symAddr (V.init sOld) -- the address must be valid in the new stack (with popped top element)
-        then do
-          stack .= V.init (V.update sOld (V.fromList [(symAddr, V.last sOld)]))
-          loadNextInstruction
-          return Nothing
-        else throwErr "StoreStack: stack address out of range!"
+  currentInstruction <- use iregister
+  case currentInstruction of
+    {-- Core machine instructions --}
+    {- PushInt n: Push integer n onto the stack
+       Effect:
+        push n
+        loadNextInstruction
+    -}
     PushInt n -> do
-      sOld <- use stack
-      stack .= V.snoc sOld n
+      push n
       loadNextInstruction
       return Nothing
-    LoadHeap a -> do
-      sOld <- use stack
-      if null sOld
-        then throwErr "LoadHeap: stack address out of range"
-        else do
-          let heapAddr = fromInteger $ V.last sOld
-          h <- use heap
-          case M.lookup heapAddr h of
-            Nothing -> throwErr "LoadHeap: heap address out of range!"
-            Just (OBJ _ fs) -> do
-              if isIndexForVector a fs
-                then do
-                  let val = fs V.! a
-                  stack .= V.snoc (V.init sOld) val
-                  loadNextInstruction
-                  return Nothing
-                else throwErr "LoadHeap: referenced a non-existing field!"
-    StoreHeap hi -> do
-      sOld <- use stack
-      if V.length sOld < 2
-        then throwErr "StoreHeap: stack address out of range"
-        else do
-          let val = V.last sOld
-          let heapAddr = fromInteger $ V.last $ V.init sOld
-          h <- use heap
-          case M.lookup heapAddr h of
-            Nothing -> throwErr "StoreHeap: heap address out of range"
-            Just (OBJ cid fs) -> do
-              if isIndexForVector hi fs
-                then do
-                  let fsNew = V.update fs (V.fromList [(hi, val)])
-                  let heapEntryNew = OBJ cid fsNew
-                  heap .= M.adjust (const heapEntryNew) heapAddr h
-                  stack .= V.init (V.init sOld)
-                  loadNextInstruction
-                  return Nothing
-                else throwErr "StoreHeap: referenced a non-existing field"
-    AllocateHeap n cid -> do
-      mt <- use mtables
-      case lookup cid mt of
-        Nothing -> throwErr "AllocateHeap: referenced a non-existing class"
-        Just _ -> do
-          let fieldsNew = V.fromList (replicate n 0)
-          let heapEntryNew = OBJ cid fieldsNew
-          key <- use ocounter
-          h <- use heap
-          heap .= M.insert key heapEntryNew h
-          ocounter += 1
-          sOld <- use stack
-          stack .= V.snoc sOld (toInteger key)
+    {- LoadStack a: Load the value from stack address a (relative to base address) and push it onto the stack
+       Effect:
+        push stack[B + 2 + a]
+        loadNextInstruction
+    -}
+    LoadStack a -> do
+      b <- use bregister
+      e <- stackGet $ b + 2 + a -- calculate actual index by accounting for base address, and stack frame information
+      push e
+      loadNextInstruction
+      return Nothing
+    {- StoreStack a: Pop the stack's topmost value and store it to stack address a
+       Effect:
+        stack[B + 2 + a] := pop
+        loadNextInstruction
+    -}
+    StoreStack a -> do
+      b <- use bregister
+      top <- pop
+      stackSet (b + 2 + a) top
+      loadNextInstruction
+      return Nothing
+    {- CombineUnary op: Combine the stack's topmost value with operator op
+       Effect:
+        push (op pop)
+        loadNextInstruction
+    -}
+    CombineUnary Not -> do
+      top <- pop
+      case combineUnary Not top of
+        Nothing -> throwDiagnosticError "CombineUnary: input value is not a boolean"
+        Just n -> do
+          push n
           loadNextInstruction
           return Nothing
-    CreateMethodTable cid methods -> do
-      mtsOld <- use mtables
-      case lookup cid mtsOld of
-        Just _ -> throwErr "CreateMethodTable: method table already exists"
-        Nothing -> do
-          mtables .= (cid, methods) : mtsOld
-          loadNextInstruction
-          return Nothing
+    {- CombineBinary op: Combine the stack's two topmost values using operator op
+       Effect:
+        snd := pop
+        fst := pop
+        push (op fst snd)
+        loadNextInstruction
+    -}
+    CombineBinary op -> do
+      sndEl <- pop
+      fstEl <- pop
+      push $ combineBinary op fstEl sndEl
+      loadNextInstruction
+      return Nothing
+    {- Jump a: Unconditionally jump to code address a
+       Effect: loadInstruction a
+    -}
     Jump a -> do
       loadInstruction a
       return Nothing
+    {- JumpIfFalse a: Jump to code address a if the stack's topmost value represents a boolean value of False
+       Effect:
+        if pop = 0
+        then loadInstruction a
+        else loadNextInstruction
+    -}
     JumpIfFalse a -> do
-      conditionalJumpTo False a
+      top <- pop
+      case integerToBool top of
+        Nothing -> throwDiagnosticError "JumpIfFalse: condition was not boolean!"
+        Just False -> loadInstruction a
+        Just True -> loadNextInstruction
       return Nothing
-    CallProcedure a n -> do
-      prog <- use code
-      unless (isIndexForVector a prog) $ throwErr "CallProcedure: code address out of range"
-      sOld <- use stack
-      when (V.length sOld < n) $ throwErr "CallProcedure: stack address out of range"
-      let numCellsBeforeParams = V.length sOld - n
-          (start, params) = V.splitAt numCellsBeforeParams sOld
-      b <- use bregister
-      pc <- use programcounter
-      stack .= start V.++ V.fromList (map toInteger [b, pc]) V.++ params
-      bregister .= V.length start
-      loadInstruction a
-      return Nothing
-    CallMethod i' n -> do
-      sOld <- use stack
-      when (V.length sOld < n + 1) $ throwErr "CallMethod: stack address out of range"
-      let numCellsBeforeParams = V.length sOld - (n + 1)
-          (start, params) = V.splitAt numCellsBeforeParams sOld
-          objAddr = fromInteger $ V.head params
-      h <- use heap
-      a <- case M.lookup objAddr h of
-        Nothing -> throwErr "CallMethod: heap address out of range"
-        Just (OBJ cid _) -> do
-          mts <- use mtables
-          case lookup cid mts of
-            Nothing -> throwErr "CallMethod: referenced invalid class"
-            Just mt -> case lookup i' mt of
-              Nothing -> throwErr "CallMethod: referenced invalid metthod"
-              Just a -> return a
-      prog <- use code
-      unless (isIndexForVector a prog) $ throwErr "CallMethod: code address out of range"
-      pc <- use programcounter
-      b <- use bregister
-      stack .= start V.++ V.fromList (map toInteger [b, pc]) V.++ params
-      bregister .= V.length start
-      loadInstruction a
-      return Nothing
-    Return returnsSth -> do
-      bOld <- use bregister
-      sOld <- use stack
-      unless (isIndexForVector bOld sOld) $ throwErr "Return: stack address out of range"
-      unless (isIndexForVector (bOld + 1) sOld) $ throwErr "Return: stack address out of range"
-      -- get rid of current stack frame
-      let sNew = V.take bOld sOld
-      if returnsSth
-        then stack .= V.snoc sNew (V.last sOld)
-        else stack .= sNew
-      -- set base address register
-      let bNew = fromInteger $ sOld V.! bOld :: BaseAddressRegister
-      bregister .= bNew
-      -- jump back to return address
-      let ra = fromInteger $ sOld V.! (bOld + 1) :: StackAddress
-      loadInstruction ra
-      return Nothing
-    CombineUnary Not -> do
-      sOld <- use stack
-      when (null sOld) $ throwErr "CombineUnary: stack address out of range"
-      case combineUnary Not $ V.last sOld of
-        Nothing -> throwErr "CombineUnary: input value is not a boolean"
-        Just n -> stack .= V.snoc (V.init sOld) n
-      loadNextInstruction
-      return Nothing
-    CombineBinary op -> do
-      sOld <- use stack
-      when (V.length sOld < 2) $ throwErr "CombineBinary: stack address out of range"
-      let sndparam = V.last sOld
-      let firstparam = V.last $ V.init sOld
-      let newBaseStack = V.init $ V.init sOld
-      let res = combineBinary op firstparam sndparam
-      stack .= V.snoc newBaseStack res
-      loadNextInstruction
-      return Nothing
+    {- Read: Read an integer value from the environment's input and push it onto the stack
+       Effect:
+        push read
+        loadNextInstruction
+    -}
     Read -> do
       inputs <- use instream
       when (null inputs) $ controlComm "need input"
       instream .= tail inputs
-      let newin = read $ head inputs :: Integer
-      sOld <- use stack
-      stack .= V.snoc sOld newin
+      push (read $ head inputs :: Integer)
       loadNextInstruction
       return Nothing
+    {- PrintInt: Pop the stack's topmost value, and print it to the environment's output
+       Effect:
+        print pop
+        loadNextInstruction
+    -}
     PrintInt -> do
-      sOld <- use stack
-      when (null sOld) $ throwErr "Print: stack address out of range"
-      let toWrite = V.last sOld
-      stack .= V.init sOld
+      toWrite <- pop
       loadNextInstruction
       return $ Just $ show toWrite
+    {- PrintStr s: Print s to the environment's output
+       Effect:
+        print s
+        loadNextInstruction
+    -}
     PrintStr msg -> do
       loadNextInstruction
       return $ Just msg
+    {- PrintStrLn s: Print s followed by a new line character to the environment's output
+       Effect:
+        print (s ++ '\n')
+        loadNextInstruction
+    -}
     PrintStrLn msg -> do
       loadNextInstruction
       return $ Just $ msg ++ "\n"
+    {- Halt: Halt the machine
+       Effect:
+        nop
+    -}
     Halt -> return Nothing
+    {-- Instructions for procedure support --}
+    {- Invoke the procedure at code address a, creating a new stack frame and passing n parameters
+       Effect:
+        p_n := pop
+        ...
+        p_1 := pop
+        push B
+        B := length stack - 1
+        push PC
+        push p_1
+        ...
+        push p_n
+        loadInstruction a
+    -}
+    CallProcedure a n -> do
+      inverseParams <- replicateM n pop
+      b <- use bregister
+      pc <- use programcounter
+      push $ toInteger b
+      s <- use stack
+      bregister .= V.length s - 1
+      push $ toInteger pc
+      mapM_ push (reverse inverseParams)
+      loadInstruction a
+      return Nothing
+    {- Return ret: Return from the current procedure invocation, jumping back to the return address, popping the current stack frame, and, depending on ret, possibly returning a value
+       Effect:
+        BOld := B
+        ra := stack[B + 1]
+
+        if ret == True
+        then retVal := pop
+
+        B := stack[B]
+        while length stack > BOld
+        do pop
+
+        if ret == True
+        then push retVal
+
+        loadInstruction ra
+    -}
+    Return ret -> do
+      b <- use bregister
+      ra <- stackGet $ b + 1
+      retVal <-
+        if ret
+          then pop
+          else return 0
+      popFrame
+      when ret $ push retVal
+      loadInstruction $ fromInteger ra
+      return Nothing
+
+    {-- Instructions for support of object-oriented features --}
+    {- LoadHeap i: Push to the stack the field value of the object with address \texttt{a} and field index \texttt{i}.
+       Effect:
+        a := pop
+        obj := H[a]
+        push fields(obj)[i]
+        loadNextInstruction
+    -}
+    LoadHeap i -> do
+      a <- pop
+      (OBJ _ fs) <- heapGetObj $ fromInteger a
+      if isIndexForVector i fs
+        then do
+          push $ fs V.! i
+          loadNextInstruction
+          return Nothing
+        else throwDiagnosticError "LoadHeap: referenced a non-existing field!"
+    {- StoreHeap i: Store the stack's topmost value to the field with index i, of object with address a where a is the stack's second topmost value
+       Effect:
+        val := pop
+        a := pop
+        fields(H[a])[i] := val
+        loadNextInstruction
+    -}
+    StoreHeap i -> do
+      val <- pop
+      a <- pop
+      heapSetField (fromInteger a) i val
+      loadNextInstruction
+      return Nothing
+    {- AllocateHeap n t: Create on the heap a new object with \texttt{n} fields and class identifier \texttt{cid} and push object's address to the stack.
+       Effect:
+        H[O] := createObj(n, cid)
+        push O
+        O := O + 1
+        loadNextInstruction
+    -}
+    AllocateHeap n cid -> do
+      mt <- use mtables
+      case lookup cid mt of
+        Nothing -> throwDiagnosticError "AllocateHeap: referenced a non-existing class"
+        Just _ -> do
+          o <- use ocounter
+          heapSetObj o $ OBJ cid (V.fromList (replicate n 0))
+          push $ toInteger o
+          ocounter += 1
+          loadNextInstruction
+          return Nothing
+    {- CreateMethodTable id [(0, a0), (1, a1), ..., (n, an)]: Create a new method table with class identifier \texttt{cid} that holds the code addresses \texttt{a0 ... an} for methods with identifiers \texttt{id0 ... idn}
+       Effect:
+        MTT[cid] := [(id0, a0), ..., (idn, an)]
+        loadNextInstruction
+    -}
+    CreateMethodTable cid methods -> do
+      mtt <- use mtables
+      case lookup cid mtt of
+        Just _ -> throwDiagnosticError "CreateMethodTable: method table already exists"
+        Nothing -> do
+          mtables .= (cid, methods) : mtt
+          loadNextInstruction
+          return Nothing
+    {- CallMethod mid n invokes method with the stack's n + 1 topmost values as parameters, of which the first is the address of the parameter object
+       The method invoked is the one with index i in the corresponding method table
+       Effect:
+        pn := pop
+        ...
+        p1 := pop
+        oa := pop
+        push B
+        B := length stack - 1
+        push PC
+        push oa
+        push p1
+        ...
+        push pn
+        obj := H[oa]
+        cid := classid(obj)
+        loadInstruction MTT[cid][mid]
+    -}
+    CallMethod mid n -> do
+      inverseParams <- replicateM n pop
+      oa <- pop
+      b <- use bregister
+      push $ toInteger b
+      s <- use stack
+      bregister .= V.length s - 1
+      pc <- use programcounter
+      push $ toInteger pc
+      push oa
+      mapM_ push (reverse inverseParams)
+      (OBJ cid _) <- heapGetObj $ fromInteger oa
+      a <- lookupMethod cid mid
+      loadInstruction a
+      return Nothing
 
 {--}
 
-{- Machine runner implementations for concrete computational contexts -}
+{- Machine environment/runner implementations for concrete computational contexts -}
+{- For a sensible runner implementation, the instruction cycle can be described by
+    code := program
+    I := code[0]
+    PC := 1
+    stack := [0, 0]
+    B := 0
+    H := []
+    O := 0
+    MTT := []
+    while instructionRegister != Halt do executeInstruction
+ -}
 run :: [Instruction] -> IO ()
 run = runDefaultIO
 
@@ -471,14 +614,16 @@ runTraceIO cs = do
   stepIOWithTraceUntilHalted m 0
   where
     stepIOWithTraceUntilHalted m n = do
-      putStrLn ("Machine runtime: " ++ show n)
-      print m
-      putStrLn ""
+      --putStrLn ("Machine runtime: " ++ show n)
+      --print m
+      putStrLn $ showLatexTableRow FULL n m
+      --putStrLn ""
       m' <- stepIO m
       if isHalted m'
         then do
-          putStrLn ("Machine runtime: " ++ show (n + 1))
-          print m'
+          --putStrLn ("Machine runtime: " ++ show (n + 1))
+          --print m'
+          putStrLn $ showLatexTableRow FULL (n + 1) m'
           return ()
         else stepIOWithTraceUntilHalted m' (n + 1)
 
