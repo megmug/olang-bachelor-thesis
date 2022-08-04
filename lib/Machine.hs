@@ -182,11 +182,6 @@ controlComm :: String -> Computation a
 controlComm e = do
   lift $ throwE $ "CONTROL: " ++ e
 
-loadNextInstruction :: Computation ()
-loadNextInstruction = do
-  pc <- use programcounter
-  loadInstruction pc
-
 loadInstruction :: CodeAddress -> Computation ()
 loadInstruction a = do
   prog <- use code
@@ -259,6 +254,7 @@ lookupMethod cid mid = do
     Just mt -> case lookup mid mt of
       Nothing -> throwDiagnosticError "referenced invalid method"
       Just a -> return a
+
 {--}
 
 {- Core stepper computation
@@ -277,7 +273,8 @@ step = do
     -}
     PushInt n -> do
       push n
-      loadNextInstruction
+      pc <- use programcounter
+      loadInstruction pc
       return Nothing
     {- LoadStack a: Load the value from stack address a (relative to base address) and push it onto the stack
        Effect:
@@ -288,7 +285,8 @@ step = do
       b <- use bregister
       e <- stackGet $ b + 2 + a -- calculate actual index by accounting for base address, and stack frame information
       push e
-      loadNextInstruction
+      pc <- use programcounter
+      loadInstruction pc
       return Nothing
     {- StoreStack a: Pop the stack's topmost value and store it to stack address a
        Effect:
@@ -299,7 +297,8 @@ step = do
       b <- use bregister
       top <- pop
       stackSet (b + 2 + a) top
-      loadNextInstruction
+      pc <- use programcounter
+      loadInstruction pc
       return Nothing
     {- CombineUnary op: Combine the stack's topmost value with operator op
        Effect:
@@ -312,7 +311,8 @@ step = do
         Nothing -> throwDiagnosticError "CombineUnary: input value is not a boolean"
         Just n -> do
           push n
-          loadNextInstruction
+          pc <- use programcounter
+          loadInstruction pc
           return Nothing
     {- CombineBinary op: Combine the stack's two topmost values using operator op
        Effect:
@@ -325,7 +325,8 @@ step = do
       sndEl <- pop
       fstEl <- pop
       push $ combineBinary op fstEl sndEl
-      loadNextInstruction
+      pc <- use programcounter
+      loadInstruction pc
       return Nothing
     {- Jump a: Unconditionally jump to code address a
        Effect: loadInstruction a
@@ -344,7 +345,9 @@ step = do
       case integerToBool top of
         Nothing -> throwDiagnosticError "JumpIfFalse: condition was not boolean!"
         Just False -> loadInstruction a
-        Just True -> loadNextInstruction
+        Just True -> do
+          pc <- use programcounter
+          loadInstruction pc
       return Nothing
     {- Read: Read an integer value from the environment's input and push it onto the stack
        Effect:
@@ -356,7 +359,8 @@ step = do
       when (null inputs) $ controlComm "need input"
       instream .= tail inputs
       push (read $ head inputs :: Integer)
-      loadNextInstruction
+      pc <- use programcounter
+      loadInstruction pc
       return Nothing
     {- PrintInt: Pop the stack's topmost value and print it to the environment's output
        Effect:
@@ -365,7 +369,8 @@ step = do
     -}
     PrintInt -> do
       toWrite <- pop
-      loadNextInstruction
+      pc <- use programcounter
+      loadInstruction pc
       return $ Just $ show toWrite
     {- PrintStr s: Print s to the environment's output
        Effect:
@@ -373,7 +378,8 @@ step = do
         loadNextInstruction
     -}
     PrintStr msg -> do
-      loadNextInstruction
+      pc <- use programcounter
+      loadInstruction pc
       return $ Just msg
     {- PrintStrLn s: Print s followed by a new line character to the environment's output
        Effect:
@@ -381,7 +387,8 @@ step = do
         loadNextInstruction
     -}
     PrintStrLn msg -> do
-      loadNextInstruction
+      pc <- use programcounter
+      loadInstruction pc
       return $ Just $ msg ++ "\n"
     {- Halt: Halt the machine
        Effect:
@@ -456,7 +463,8 @@ step = do
       if isIndexForVector i fs
         then do
           push $ fs V.! i
-          loadNextInstruction
+          pc <- use programcounter
+          loadInstruction pc
           return Nothing
         else throwDiagnosticError "LoadHeap: referenced a non-existing field!"
     {- StoreHeap i: Store the stack's topmost value to the field with index i, of object with address a where a is the stack's second topmost value
@@ -470,7 +478,8 @@ step = do
       val <- pop
       a <- pop
       heapSetField (fromInteger a) i val
-      loadNextInstruction
+      pc <- use programcounter
+      loadInstruction pc
       return Nothing
     {- AllocateHeap n t: Create on the heap a new object with \texttt{n} fields and class identifier \texttt{cid} and push object's address to the stack.
        Effect:
@@ -488,7 +497,8 @@ step = do
           heapSetObj o $ OBJ cid (V.fromList (replicate n 0))
           push $ toInteger o
           ocounter += 1
-          loadNextInstruction
+          pc <- use programcounter
+          loadInstruction pc
           return Nothing
     {- CreateMethodTable id [(0, a0), (1, a1), ..., (n, an)]: Create a new method table with class identifier \texttt{cid} that holds the code addresses \texttt{a0 ... an} for methods with identifiers \texttt{id0 ... idn}
        Effect:
@@ -501,7 +511,8 @@ step = do
         Just _ -> throwDiagnosticError "CreateMethodTable: method table already exists"
         Nothing -> do
           mtables .= (cid, methods) : mtt
-          loadNextInstruction
+          pc <- use programcounter
+          loadInstruction pc
           return Nothing
     {- CallMethod mid n invokes method with the stack's n + 1 topmost values as parameters, of which the first is the address of the parameter object
        The method invoked is the one with index i in the corresponding method table
