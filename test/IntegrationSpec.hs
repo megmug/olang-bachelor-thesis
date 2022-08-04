@@ -50,6 +50,10 @@ spec = do
     it "primes program outputs the right numbers" $ do
       source <- readFile "resources/test-programs/primes-bounded.olang"
       runTest (unsafeGenerate source) [] `shouldBe` Right "I will now begin listing some primes\n2\n3\n5\n"
+
+    it "fractran program outputs the right numbers when PRIMEGAME is run for 100 steps" $ do
+      source <- readFile "resources/test-programs/fractran-bounded.olang"
+      runTest (unsafeGenerate source) ["0", "2"] `shouldBe` Right "Welcome to the FRACTRAN interpreter.\nWhich program do you want to execute?\n0: PRIMEGAME\n1: Fibonacci\n2: POLYGAME\n3: Enter custom program interactively\nIf started with input 2, PRIMEGAME computes all prime powers of 2 (among some other numbers which are not powers of 2).\nInput number: Program: 17 / 91, 78 / 85, 19 / 51, 23 / 38, 29 / 33, 77 / 29, 95 / 23, 77 / 19, 1 / 17, 11 / 13, 13 / 11, 15 / 2, 1 / 7, 55 / 1, \nInput: 2\nProgram output: \n15\n825\n725\n1925\n2275\n425\n390\n330\n290\n770\n910\n170\n156\n132\n116\n"
   
   describe "running example programs" $ do
     it "hello program program outputs 'Hello World'" $ do
