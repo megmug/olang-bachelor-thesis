@@ -610,20 +610,20 @@ runTraceIO cs = do
   m <- case createMachine cs of
     Nothing -> error "invalid machine code"
     Just m -> return m
-  stepIOWithTraceUntilHalted m 0 False
+  stepIOWithTraceUntilHalted m 0 False FULL
   where
-    stepIOWithTraceUntilHalted m n generateLatex = do
-      printInfo m n generateLatex
+    stepIOWithTraceUntilHalted m n generateLatex latexLevel = do
+      printInfo m n generateLatex latexLevel
       m' <- stepIO m
       if isHalted m'
         then do
-          printInfo m' (n + 1) generateLatex
+          printInfo m' (n + 1) generateLatex latexLevel
         else do
           when generateLatex $ putStrLn $ showLatexTableRow FULL (n + 1) m'
-          stepIOWithTraceUntilHalted m' (n + 1) generateLatex
+          stepIOWithTraceUntilHalted m' (n + 1) generateLatex latexLevel
 
-    printInfo m stepNum True = putStrLn $ showLatexTableRow FULL stepNum m
-    printInfo m stepNum False = do
+    printInfo m stepNum True l = putStrLn $ showLatexTableRow l stepNum m
+    printInfo m stepNum False _ = do
           putStrLn ("Machine runtime: " ++ show stepNum)
           print m
           putStrLn ""
