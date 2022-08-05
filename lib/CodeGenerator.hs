@@ -422,7 +422,7 @@ instance Generatable ClassDeclaration where
       addFieldToClassEntry cid sd = do
         ct <- use classtable
         case lookup cid ct of
-          Nothing -> throwE "BUG encountered: trying to add field to non-existing class!"
+          Nothing -> throwDiagnosticError "BUG encountered: trying to add field to non-existing class!"
           Just (ClassEntry cn ucc ft mt) -> case sd of
             IntDeclaration (Int sn) -> classtable %= replaceClassInTable cid (ClassEntry cn ucc (FieldEntry sn INT (length ft) : ft) mt)
             ObjectDeclaration (Object t sn) -> case lookupClassByName t ct of
@@ -505,7 +505,7 @@ instance ContextGeneratable ClassID MethodDeclaration where
       updateClassTableWithNewMethod cid' pe@(ProcEntry s _) = do
         ct <- use classtable
         case lookup cid' ct of
-          Nothing -> throwE "BUG encountered: method has no corresponding class!"
+          Nothing -> throwDiagnosticError "BUG encountered: method has no corresponding class!"
           Just (ClassEntry cn ucid ft mt) -> case lookupOverridableMethod ct s mt of
             -- If an overridable method doesn't exist yet, this method is new and can just be added with a new ID
             Nothing -> classtable .= replaceClassInTable cid' (ClassEntry cn ucid ft ((length mt, pe) : mt)) ct
@@ -582,15 +582,15 @@ instance ContextGeneratable ProcKind ProcedureDeclaration where
       INIT -> do
         prefixlength += 2
         case mrp of
-          Nothing -> throwE "BUG encountered: initializer without return value!"
+          Nothing -> throwDiagnosticError "BUG encountered: initializer without return value!"
           Just rp -> case lookupSymbol stWithParams (getSymbolDeclName rp) of
-            Nothing -> throwE "BUG encountered: return parameter missing from symbols!"
+            Nothing -> throwDiagnosticError "BUG encountered: return parameter missing from symbols!"
             Just (SymbolEntry _ t p) -> case t of
-              INT -> throwE "BUG encountered: initializer with INT return value!"
+              INT -> throwDiagnosticError "BUG encountered: initializer with INT return value!"
               OBJ s -> do
                 ct <- use classtable
                 case lookupClassByName s ct of
-                  Nothing -> throwE "BUG encountered: initializer with invalid return type!"
+                  Nothing -> throwDiagnosticError "BUG encountered: initializer with invalid return type!"
                   -- generate heap allocation instructions, along with instructions to correctly initialize all fields
                   Just (cid, ClassEntry _ _ ft _) -> do
                     let fieldInitCmds = concatMap inits ft
@@ -605,7 +605,7 @@ instance ContextGeneratable ProcKind ProcedureDeclaration where
     returnInstructions <- case mrp of
       Nothing -> return [Return False]
       Just rp -> case lookupSymbol stWithParams (getSymbolDeclName rp) of
-        Nothing -> throwE "BUG encountered: return parameter missing from symbols!"
+        Nothing -> throwDiagnosticError "BUG encountered: return parameter missing from symbols!"
         Just (SymbolEntry _ _ p) -> return [LoadStack p, Return True]
     -- Update prefix
     prefixlength += length returnInstructions
@@ -638,7 +638,7 @@ instance Generatable Call where
     ct <- use classtable
     -- lookup field
     fieldPos <- case lookupClassByName objType ct of
-      Nothing -> throwE $ "BUG encountered: invalid class for object " ++ o
+      Nothing -> throwDiagnosticError $ "BUG encountered: invalid class for object " ++ o
       Just (_, ClassEntry _ _ ft _) -> case lookupFieldByName ft f of
         Nothing -> throwE $ "invalid field " ++ f ++ " reference for object " ++ o
         Just (FieldEntry _ _ p) -> return p
@@ -755,7 +755,7 @@ instance ContextGeneratable InstructionContext SyntaxTree.Instruction where
     ct <- use classtable
     -- lookup field
     (fieldType, fieldPos) <- case lookupClassByName objType ct of
-      Nothing -> throwE $ "BUG encountered: invalid class for object " ++ o
+      Nothing -> throwDiagnosticError $ "BUG encountered: invalid class for object " ++ o
       Just (_, ClassEntry _ _ ft _) -> case lookupFieldByName ft f of
         Nothing -> throwE $ "invalid field " ++ f ++ " reference for object " ++ o
         Just (FieldEntry _ t p) -> return (t, p)
@@ -781,7 +781,7 @@ instance ContextGeneratable InstructionContext SyntaxTree.Instruction where
     st' <- use symtable
     -- lookup position of new symbol
     pos <- case lookupSymbol st' n of
-      Nothing -> throwE "BUG encountered: impossibly, the symbol we just added vanished"
+      Nothing -> throwDiagnosticError "BUG encountered: impossibly, the symbol we just added vanished"
       Just (SymbolEntry _ _ p) -> return p
     -- return instructions and update prefix as well symbol table
     prefixlength += 2
@@ -800,7 +800,7 @@ instance ContextGeneratable InstructionContext SyntaxTree.Instruction where
     st' <- use symtable
     -- look up position of new symbol
     pos <- case lookupSymbol st' n of
-      Nothing -> throwE "BUG encountered: impossibly, the symbol we just added vanished"
+      Nothing -> throwDiagnosticError "BUG encountered: impossibly, the symbol we just added vanished"
       Just (SymbolEntry _ _ p) -> return p
     -- return instructions and update prefix as well as symbol table
     prefixlength += 2
