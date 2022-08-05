@@ -1,5 +1,5 @@
 import CodeGenerator ( Generatable(generate) )
-import Machine ( runTrace )
+import Machine ( runProgramTrace )
 import Parser ( ParseResult, Parseable(parse) )
 import SyntaxTree ( Program )
 import System.Environment ( getArgs )
@@ -24,5 +24,5 @@ main = do
             Left e -> putStrLn $ "Compilation error: " ++ e
             Right cmds -> do
               putStrLn $ "Successful compilation.\nResult: " ++ show cmds
-              runTrace cmds
+              runProgramTrace cmds
   putStrLn "Program terminated."

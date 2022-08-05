@@ -1,5 +1,5 @@
 import CodeGenerator ( Generatable(generate) )
-import Machine ( run )
+import Machine ( runProgram )
 import Parser ( ParseResult, Parseable(parse) )
 import SyntaxTree ( Program )
 import System.Environment ( getArgs )
@@ -20,4 +20,4 @@ main = do
           case generate pro of
             Left e -> putStrLn $ "Compilation error: " ++ e
             Right cmds -> do
-              run cmds
+              runProgram cmds

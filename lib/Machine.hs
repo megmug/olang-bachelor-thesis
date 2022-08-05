@@ -5,8 +5,8 @@ module Machine where
 import Control.Lens (set, use, view, (+=), (.=))
 import Control.Monad (replicateM, when)
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Except (throwE, ExceptT, runExceptT)
-import Control.Monad.Trans.State (get, State, runState)
+import Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
+import Control.Monad.Trans.State (State, get, runState)
 import qualified Data.IntMap as M
 import qualified Data.Vector as V
 import MachineInstruction
@@ -31,7 +31,8 @@ data Machine
       ObjectCounter
       Heap
       MethodTables
-      InputStream
+      InputBuffer
+      OutputBuffer
   deriving (Eq)
 
 type Code = V.Vector Instruction
@@ -54,7 +55,9 @@ type MethodTables = [(ClassID, MethodTable)]
 
 type MethodTable = [(MethodID, CodeAddress)]
 
-type InputStream = [String]
+type InputBuffer = [String]
+
+type OutputBuffer = [String]
 
 -- A computation is a monadic action featuring a Machine state and a possible String exception
 -- The result might be a string, but it doesn't have to be
@@ -64,37 +67,40 @@ type Computation a = ExceptT String (State Machine) a
 
 {- Define lenses for our machine data type -}
 code :: Functor f => (Code -> f Code) -> Machine -> f Machine
-code f (Machine c s i pc b o h mts input) = (\c' -> Machine c' s i pc b o h mts input) <$> f c
+code f (Machine c s i pc b o h mts input output) = (\c' -> Machine c' s i pc b o h mts input output) <$> f c
 
 stack :: Functor f => (Stack -> f Stack) -> Machine -> f Machine
-stack f (Machine c s i pc b o h mts input) = (\s' -> Machine c s' i pc b o h mts input) <$> f s
+stack f (Machine c s i pc b o h mts input output) = (\s' -> Machine c s' i pc b o h mts input output) <$> f s
 
 iregister :: Functor f => (InstructionRegister -> f InstructionRegister) -> Machine -> f Machine
-iregister f (Machine c s i pc b o h mts input) = (\i' -> Machine c s i' pc b o h mts input) <$> f i
+iregister f (Machine c s i pc b o h mts input output) = (\i' -> Machine c s i' pc b o h mts input output) <$> f i
 
 programcounter :: Functor f => (ProgramCounter -> f ProgramCounter) -> Machine -> f Machine
-programcounter f (Machine c s i pc b o h mts input) = (\pc' -> Machine c s i pc' b o h mts input) <$> f pc
+programcounter f (Machine c s i pc b o h mts input output) = (\pc' -> Machine c s i pc' b o h mts input output) <$> f pc
 
 bregister :: Functor f => (BaseAddressRegister -> f BaseAddressRegister) -> Machine -> f Machine
-bregister f (Machine c s i pc b o h mts input) = (\b' -> Machine c s i pc b' o h mts input) <$> f b
+bregister f (Machine c s i pc b o h mts input output) = (\b' -> Machine c s i pc b' o h mts input output) <$> f b
 
 ocounter :: Functor f => (ObjectCounter -> f ObjectCounter) -> Machine -> f Machine
-ocounter f (Machine c s i pc b o h mts input) = (\o' -> Machine c s i pc b o' h mts input) <$> f o
+ocounter f (Machine c s i pc b o h mts input output) = (\o' -> Machine c s i pc b o' h mts input output) <$> f o
 
 heap :: Functor f => (Heap -> f Heap) -> Machine -> f Machine
-heap f (Machine c s i pc b o h mts input) = (\h' -> Machine c s i pc b o h' mts input) <$> f h
+heap f (Machine c s i pc b o h mts input output) = (\h' -> Machine c s i pc b o h' mts input output) <$> f h
 
 mtables :: Functor f => (MethodTables -> f MethodTables) -> Machine -> f Machine
-mtables f (Machine c s i pc b o h mts input) = (\mts' -> Machine c s i pc b o h mts' input) <$> f mts
+mtables f (Machine c s i pc b o h mts input output) = (\mts' -> Machine c s i pc b o h mts' input output) <$> f mts
 
-instream :: Functor f => (InputStream -> f InputStream) -> Machine -> f Machine
-instream f (Machine c s i pc b o h mts input) = (\input' -> Machine c s i pc b o h mts input') <$> f input
+inbuffer :: Functor f => (InputBuffer -> f InputBuffer) -> Machine -> f Machine
+inbuffer f (Machine c s i pc b o h mts input output) = (\input' -> Machine c s i pc b o h mts input' output) <$> f input
+
+outbuffer :: Functor f => (OutputBuffer -> f OutputBuffer) -> Machine -> f Machine
+outbuffer f (Machine c s i pc b o h mts input output) = (\output' -> Machine c s i pc b o h mts input output') <$> f output
 
 {--}
 
 {- Utility functions -}
 instance Show Machine where
-  show (Machine _ s i pc b o h mts input) =
+  show (Machine _ s i pc b o h mts input output) =
     "Machine state:"
       ++ "\nStack: "
       ++ show s
@@ -112,15 +118,16 @@ instance Show Machine where
       ++ show mts
       ++ "\nInput stream: "
       ++ show input
+      ++ "\nOutput stream: "
+      ++ show output
 
-{- Utility code for displaying machine traces in latex tables for the bachelor thesis paper
+{- Utility code for displaying machine traces in latex tables for the bachelor thesis paper -}
 data LatexShowMode = CORE | PROC | FULL
 
 showLatexTableRow :: LatexShowMode -> Int -> Machine -> String
-showLatexTableRow CORE stepnum (Machine _ s i pc _ _ _ _ _) = show stepnum ++ " & " ++ show pc ++ " & \\haskell{" ++ show i ++ "} & \\haskell{" ++ show s ++ "} " ++ "\\tabularnewline \\hline"
-showLatexTableRow PROC stepnum (Machine _ s i pc b _ _ _ _) = show stepnum ++ " & " ++ show pc ++ " & \\haskell{" ++ show i ++ "} & \\haskell{" ++ show s ++ "} & " ++ show b ++ " \\tabularnewline \\hline"
-showLatexTableRow FULL stepnum (Machine _ s i pc b oc h mt _) = show stepnum ++ " & " ++ show pc ++ " & \\haskell{" ++ show i ++ "} & \\haskell{" ++ show s ++ "} & " ++ show b ++ " & \\haskell{" ++ show mt ++ "} & \\haskell{" ++ drop 9 (show h) ++ "} & " ++ show oc ++ " \\tabularnewline \\hline"
--}
+showLatexTableRow CORE stepnum (Machine _ s i pc _ _ _ _ _ _) = show stepnum ++ " & " ++ show pc ++ " & \\haskell{" ++ show i ++ "} & \\haskell{" ++ show s ++ "} " ++ "\\tabularnewline \\hline"
+showLatexTableRow PROC stepnum (Machine _ s i pc b _ _ _ _ _) = show stepnum ++ " & " ++ show pc ++ " & \\haskell{" ++ show i ++ "} & \\haskell{" ++ show s ++ "} & " ++ show b ++ " \\tabularnewline \\hline"
+showLatexTableRow FULL stepnum (Machine _ s i pc b oc h mt _ _) = show stepnum ++ " & " ++ show pc ++ " & \\haskell{" ++ show i ++ "} & \\haskell{" ++ show s ++ "} & " ++ show b ++ " & \\haskell{" ++ show mt ++ "} & \\haskell{" ++ drop 9 (show h) ++ "} & " ++ show oc ++ " \\tabularnewline \\hline"
 
 -- Show a code segment with position markings
 customShow :: Code -> String
@@ -151,9 +158,9 @@ boolToInteger True = 1
 createMachine :: [Instruction] -> Maybe Machine
 createMachine cs = createMachineWithInput cs []
 
-createMachineWithInput :: [Instruction] -> InputStream -> Maybe Machine
+createMachineWithInput :: [Instruction] -> InputBuffer -> Maybe Machine
 createMachineWithInput [] _ = Nothing
-createMachineWithInput (c : cs) inputs = Just $ Machine (V.fromList (c : cs)) (V.fromList [0, 0]) c 1 0 0 M.empty [] inputs
+createMachineWithInput (c : cs) inputs = Just $ Machine (V.fromList (c : cs)) (V.fromList [0, 0]) c 1 0 0 M.empty [] inputs []
 
 combineUnary :: UnaryOperator -> Integer -> Maybe Integer
 combineUnary Not 0 = Just 1
@@ -178,9 +185,9 @@ throwDiagnosticError e = do
   m <- lift get
   throwE $ e ++ "\n" ++ show m
 
-controlComm :: String -> Computation a
+controlComm :: String -> Computation ()
 controlComm e = do
-  throwE $ "CONTROL: " ++ e
+  throwE $ "CONTROL:" ++ e
 
 loadInstruction :: CodeAddress -> Computation ()
 loadInstruction a = do
@@ -261,7 +268,7 @@ lookupMethod cid mid = do
  - This is independent from a concrete computational context like IO to keep things modular
  - Through the environment, the computation will take in inputs through its input stream and output messages as a result of the computation
  -}
-step :: Computation (Maybe String)
+step :: Computation ()
 step = do
   currentInstruction <- use iregister
   case currentInstruction of
@@ -275,7 +282,6 @@ step = do
       push n
       pc <- use programcounter
       loadInstruction pc
-      return Nothing
     {- LoadStack a: Load the value from stack address a (relative to base address) and push it onto the stack
        Effect:
         push stack[B + 2 + a]
@@ -287,7 +293,6 @@ step = do
       push e
       pc <- use programcounter
       loadInstruction pc
-      return Nothing
     {- StoreStack a: Pop the stack's topmost value and store it to stack address a
        Effect:
         stack[B + 2 + a] := pop
@@ -299,7 +304,6 @@ step = do
       stackSet (b + 2 + a) top
       pc <- use programcounter
       loadInstruction pc
-      return Nothing
     {- CombineUnary op: Combine the stack's topmost value with operator op
        Effect:
         push (op pop)
@@ -313,7 +317,6 @@ step = do
           push n
           pc <- use programcounter
           loadInstruction pc
-          return Nothing
     {- CombineBinary op: Combine the stack's two topmost values using operator op
        Effect:
         snd := pop
@@ -327,13 +330,10 @@ step = do
       push $ combineBinary op fstEl sndEl
       pc <- use programcounter
       loadInstruction pc
-      return Nothing
     {- Jump a: Unconditionally jump to code address a
        Effect: loadInstruction a
     -}
-    Jump a -> do
-      loadInstruction a
-      return Nothing
+    Jump a -> loadInstruction a
     {- JumpIfFalse a: Jump to code address a if the stack's topmost value represents a boolean value of False
        Effect:
         if pop = 0
@@ -348,20 +348,18 @@ step = do
         Just True -> do
           pc <- use programcounter
           loadInstruction pc
-      return Nothing
     {- Read: Read an integer value from the environment's input and push it onto the stack
        Effect:
         push read
         loadNextInstruction
     -}
     Read -> do
-      inputs <- use instream
-      when (null inputs) $ controlComm "need input"
-      instream .= tail inputs
+      inputs <- use inbuffer
+      when (null inputs) $ controlComm "IN"
+      inbuffer .= tail inputs
       push (read $ head inputs :: Integer)
       pc <- use programcounter
       loadInstruction pc
-      return Nothing
     {- PrintInt: Pop the stack's topmost value and print it to the environment's output
        Effect:
         print pop
@@ -369,32 +367,38 @@ step = do
     -}
     PrintInt -> do
       toWrite <- pop
+      out <- use outbuffer
+      outbuffer .= out ++ [show toWrite]
       pc <- use programcounter
       loadInstruction pc
-      return $ Just $ show toWrite
+      controlComm "OUT"
     {- PrintStr s: Print s to the environment's output
        Effect:
         print s
         loadNextInstruction
     -}
     PrintStr msg -> do
+      out <- use outbuffer
+      outbuffer .= out ++ [msg]
       pc <- use programcounter
       loadInstruction pc
-      return $ Just msg
+      controlComm "OUT"
     {- PrintStrLn s: Print s followed by a new line character to the environment's output
        Effect:
         print (s ++ '\n')
         loadNextInstruction
     -}
     PrintStrLn msg -> do
+      out <- use outbuffer
+      outbuffer .= out ++ [msg ++ "\n"]
       pc <- use programcounter
       loadInstruction pc
-      return $ Just $ msg ++ "\n"
+      controlComm "OUT"
     {- Halt: Halt the machine
        Effect:
         nop
     -}
-    Halt -> return Nothing
+    Halt -> return ()
     {-- Instructions for procedure support --}
     {- Invoke the procedure at code address a, creating a new stack frame and passing n parameters
        Effect:
@@ -419,7 +423,6 @@ step = do
       push $ toInteger pc
       mapM_ push (reverse inverseParams)
       loadInstruction a
-      return Nothing
     {- Return ret: Return from the current procedure invocation, jumping back to the return address, popping the current stack frame, and, depending on ret, possibly returning a value
        Effect:
         BOld := B
@@ -447,7 +450,6 @@ step = do
       popFrame
       when ret $ push retVal
       loadInstruction $ fromInteger ra
-      return Nothing
 
     {-- Instructions for support of object-oriented features --}
     {- LoadHeap i: Push to the stack the field value of the object with address \texttt{a} and field index \texttt{i}.
@@ -465,7 +467,6 @@ step = do
           push $ fs V.! i
           pc <- use programcounter
           loadInstruction pc
-          return Nothing
         else throwDiagnosticError "LoadHeap: referenced a non-existing field!"
     {- StoreHeap i: Store the stack's topmost value to the field with index i, of object with address a where a is the stack's second topmost value
        Effect:
@@ -480,7 +481,6 @@ step = do
       heapSetField (fromInteger a) i val
       pc <- use programcounter
       loadInstruction pc
-      return Nothing
     {- AllocateHeap n t: Create on the heap a new object with \texttt{n} fields and class identifier \texttt{cid} and push object's address to the stack.
        Effect:
         H[O] := createObj(n, cid)
@@ -499,7 +499,6 @@ step = do
           ocounter += 1
           pc <- use programcounter
           loadInstruction pc
-          return Nothing
     {- CreateMethodTable id [(0, a0), (1, a1), ..., (n, an)]: Create a new method table with class identifier \texttt{cid} that holds the code addresses \texttt{a0 ... an} for methods with identifiers \texttt{id0 ... idn}
        Effect:
         MTT[cid] := [(id0, a0), ..., (idn, an)]
@@ -513,7 +512,6 @@ step = do
           mtables .= (cid, methods) : mtt
           pc <- use programcounter
           loadInstruction pc
-          return Nothing
     {- CallMethod mid n invokes method with the stack's n + 1 topmost values as parameters, of which the first is the address of the parameter object
        The method invoked is the one with index i in the corresponding method table
        Effect:
@@ -546,7 +544,14 @@ step = do
       (OBJ cid _) <- heapGetObj $ fromInteger oa
       a <- lookupMethod cid mid
       loadInstruction a
-      return Nothing
+
+run :: Computation ()
+run = do
+  -- while I != Halt do executeInstruction
+  step
+  i <- use iregister
+  when (i /= Halt) $ do
+    run
 
 {--}
 
@@ -560,82 +565,81 @@ step = do
     H := []
     O := 0
     MTT := []
-    while instructionRegister != Halt do executeInstruction
+    while I != Halt do executeInstruction
  -}
-run :: [Instruction] -> IO ()
-run = runDefaultIO
+runProgram :: [Instruction] -> IO ()
+runProgram = runProgramIO
 
-runDebug :: [Instruction] -> IO ()
-runDebug = runInteractiveIO
+runProgramDebug :: [Instruction] -> IO ()
+runProgramDebug = runInteractiveIO
 
-runTrace :: [Instruction] -> IO ()
-runTrace = runTraceIO
+runProgramTrace :: [Instruction] -> IO ()
+runProgramTrace = runTraceIO
 
-stepTest :: Machine -> Either String (String, Machine)
-stepTest m = case runState (runExceptT step) m of
-  (Left e, _) -> error e
-  (Right Nothing, m') -> return ("", m')
-  (Right (Just s), m') -> return (s, m')
-
-stepIO :: Machine -> IO Machine
-stepIO m = do
-  case runState (runExceptT step) m of
-    (Left "CONTROL: need input", _) -> do
-      l <- getLine
-      let m' = set instream [l] m
-      return m'
-    (Left e, _) -> error e
-    (Right Nothing, m') -> return m'
-    (Right (Just s), m') -> do
-      putStr s
-      return m'
-
-runTest :: [Instruction] -> InputStream -> Either String String
-runTest cs s = case createMachineWithInput cs s of
+runProgramTest :: [Instruction] -> InputBuffer -> Either String String
+runProgramTest cs s = case createMachineWithInput cs s of
   Nothing -> Left "invalid machine code"
-  Just m -> runAccumulatingOutput m ""
-  where
-    runAccumulatingOutput m s' = case stepTest m of
-      Left str -> Left str
-      Right (out, m') ->
-        if isHalted m'
-          then Right $ s' ++ out
-          else runAccumulatingOutput m' (s' ++ out)
+  Just m -> runTest m
 
-runDefaultIO :: [Instruction] -> IO ()
-runDefaultIO cs = do
-  m <- case createMachine cs of
-    Nothing -> error "invalid machine code"
-    Just m -> return m
-  stepIOUntilHalted m
-  where
-    stepIOUntilHalted :: Machine -> IO ()
-    stepIOUntilHalted m = do
-      m' <- stepIO m
-      if isHalted m'
-        then return ()
-        else stepIOUntilHalted m'
+runProgramIO :: [Instruction] -> IO ()
+runProgramIO cs = case createMachine cs of
+  Nothing -> error "invalid machine code"
+  Just m -> runIO m
+
+runIO :: Machine -> IO ()
+runIO m = do
+  case runState (runExceptT run) m of
+    (Right (), _) -> return ()
+    (Left "CONTROL:IN", m') -> do
+      l <- getLine
+      runIO $ set inbuffer [l] m'
+    (Left "CONTROL:OUT", m') -> do
+      let out = view outbuffer m'
+      putStr $ concat out
+      runIO (set outbuffer [] m')
+    (Left e, _) -> error e
+
+runTest :: Machine -> Either String String
+runTest m = case runState (runExceptT run) m of
+  (Right (), m') -> Right $ concat $ view outbuffer m'
+  (Left "CONTROL:OUT", m') -> runTest m'
+  (Left e, _) -> error e
 
 runTraceIO :: [Instruction] -> IO ()
 runTraceIO cs = do
   m <- case createMachine cs of
     Nothing -> error "invalid machine code"
     Just m -> return m
-  stepIOWithTraceUntilHalted m 0
+  stepIOWithTraceUntilHalted m 0 False
   where
-    stepIOWithTraceUntilHalted m n = do
-      putStrLn ("Machine runtime: " ++ show n)
-      print m
-      --putStrLn $ showLatexTableRow FULL n m
-      putStrLn ""
+    stepIOWithTraceUntilHalted m n generateLatex = do
+      printInfo m n generateLatex
       m' <- stepIO m
       if isHalted m'
         then do
-          putStrLn ("Machine runtime: " ++ show (n + 1))
-          print m'
-          --putStrLn $ showLatexTableRow FULL (n + 1) m'
-          return ()
-        else stepIOWithTraceUntilHalted m' (n + 1)
+          printInfo m' (n + 1) generateLatex
+        else do
+          when generateLatex $ putStrLn $ showLatexTableRow FULL (n + 1) m'
+          stepIOWithTraceUntilHalted m' (n + 1) generateLatex
+
+    printInfo m stepNum True = putStrLn $ showLatexTableRow FULL stepNum m
+    printInfo m stepNum False = do
+          putStrLn ("Machine runtime: " ++ show stepNum)
+          print m
+          putStrLn ""
+
+stepIO :: Machine -> IO Machine
+stepIO m = do
+  case runState (runExceptT step) m of
+    (Left "CONTROL:IN", m') -> do
+      l <- getLine
+      let m'' = set inbuffer [l] m'
+      return m''
+    (Left "CONTROL:OUT", m') -> do
+      putStr $ concat $ view outbuffer m'
+      return $ set outbuffer [] m'
+    (Left e, _) -> error e
+    (Right (), m') -> return m'
 
 runInteractiveIO :: [Instruction] -> IO ()
 runInteractiveIO cs = do
@@ -651,7 +655,6 @@ runInteractiveIO cs = do
         then do
           print m'
           putStrLn "Machine halted."
-          return ()
         else do
           print m'
           putStrLn "Press enter for next machine step"
