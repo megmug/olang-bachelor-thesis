@@ -73,7 +73,7 @@ import SyntaxTree
 {-# ANN module ("hlint: ignore Avoid lambda") #-}
 
 {- Basic helper type definitions -}
--- A symbol has a name, can be const and has a type as well as a position in the local variable segment on the stack
+-- A symbol has a name, a type as well as a position in the local variable segment on the stack
 data SymbolEntry = SymbolEntry String Type Position deriving (Eq, Show)
 
 -- A type can be either a normal primitive integer or an object with a type
