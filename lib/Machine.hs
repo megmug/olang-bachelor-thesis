@@ -5,8 +5,8 @@ module Machine where
 import Control.Lens (set, use, view, (+=), (.=))
 import Control.Monad (replicateM, when)
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Except (Except, runExcept, throwE)
-import Control.Monad.Trans.State (StateT (runStateT), get)
+import Control.Monad.Trans.Except (throwE, ExceptT, runExceptT)
+import Control.Monad.Trans.State (get, State, runState)
 import qualified Data.IntMap as M
 import qualified Data.Vector as V
 import MachineInstruction
@@ -58,7 +58,7 @@ type InputStream = [String]
 
 -- A computation is a monadic action featuring a Machine state and a possible String exception
 -- The result might be a string, but it doesn't have to be
-type Computation a = StateT Machine (Except String) a
+type Computation a = ExceptT String (State Machine) a
 
 {--}
 
@@ -175,12 +175,12 @@ combineBinary op n m = case op of
 {- Commonly used state computations -}
 throwDiagnosticError :: String -> Computation a
 throwDiagnosticError e = do
-  m <- get
-  lift $ throwE $ e ++ "\n" ++ show m
+  m <- lift get
+  throwE $ e ++ "\n" ++ show m
 
 controlComm :: String -> Computation a
 controlComm e = do
-  lift $ throwE $ "CONTROL: " ++ e
+  throwE $ "CONTROL: " ++ e
 
 loadInstruction :: CodeAddress -> Computation ()
 loadInstruction a = do
@@ -572,21 +572,21 @@ runTrace :: [Instruction] -> IO ()
 runTrace = runTraceIO
 
 stepTest :: Machine -> Either String (String, Machine)
-stepTest m = case runExcept $ runStateT step m of
-  Left e -> error e
-  Right (Nothing, m') -> return ("", m')
-  Right (Just s, m') -> return (s, m')
+stepTest m = case runState (runExceptT step) m of
+  (Left e, _) -> error e
+  (Right Nothing, m') -> return ("", m')
+  (Right (Just s), m') -> return (s, m')
 
 stepIO :: Machine -> IO Machine
 stepIO m = do
-  case runExcept $ runStateT step m of
-    Left "CONTROL: need input" -> do
+  case runState (runExceptT step) m of
+    (Left "CONTROL: need input", _) -> do
       l <- getLine
       let m' = set instream [l] m
       return m'
-    Left e -> error e
-    Right (Nothing, m') -> return m'
-    Right (Just s, m') -> do
+    (Left e, _) -> error e
+    (Right Nothing, m') -> return m'
+    (Right (Just s), m') -> do
       putStr s
       return m'
 
