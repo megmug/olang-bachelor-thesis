@@ -570,9 +570,6 @@ run = do
 runProgram :: [Instruction] -> IO ()
 runProgram = runProgramIO
 
-runProgramDebug :: [Instruction] -> IO ()
-runProgramDebug = runInteractiveIO
-
 runProgramTrace :: [Instruction] -> IO ()
 runProgramTrace = runTraceIO
 
@@ -640,25 +637,5 @@ stepIO m = do
       return $ set outbuffer [] m'
     (Left e, _) -> error e
     (Right (), m') -> return m'
-
-runInteractiveIO :: [Instruction] -> IO ()
-runInteractiveIO cs = do
-  m <- case createMachine cs of
-    Nothing -> error "invalid machine code"
-    Just m -> return m
-  stepInteractivelyUntilHalted m
-  where
-    stepInteractivelyUntilHalted :: Machine -> IO ()
-    stepInteractivelyUntilHalted m = do
-      m' <- stepIO m
-      if isHalted m'
-        then do
-          print m'
-          putStrLn "Machine halted."
-        else do
-          print m'
-          putStrLn "Press enter for next machine step"
-          _ <- getLine
-          stepInteractivelyUntilHalted m'
 
 {--}
