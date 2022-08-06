@@ -584,8 +584,7 @@ runProgramIO cs = case createMachine cs of
   Just m -> runIO m
 
 runIO :: Machine -> IO ()
-runIO m = do
-  case runState (runExceptT run) m of
+runIO m = case runState (runExceptT run) m of
     (Right (), _) -> return ()
     (Left "CONTROL:IN", m') -> do
       l <- getLine
@@ -603,11 +602,9 @@ runTest m = case runState (runExceptT run) m of
   (Left e, _) -> error e
 
 runTraceIO :: [Instruction] -> IO ()
-runTraceIO cs = do
-  m <- case createMachine cs of
+runTraceIO cs = case createMachine cs of
     Nothing -> error "invalid machine code"
-    Just m -> return m
-  stepIOWithTraceUntilHalted m 0 False FULL
+    Just m -> stepIOWithTraceUntilHalted m 0 False FULL
   where
     stepIOWithTraceUntilHalted m n generateLatex latexLevel = do
       printInfo m n generateLatex latexLevel
@@ -626,8 +623,7 @@ runTraceIO cs = do
           putStrLn ""
 
 stepIO :: Machine -> IO Machine
-stepIO m = do
-  case runState (runExceptT step) m of
+stepIO m = case runState (runExceptT step) m of
     (Left "CONTROL:IN", m') -> do
       l <- getLine
       let m'' = set inbuffer [l] m'
