@@ -266,7 +266,7 @@ lookupMethod cid mid = do
 
 {- Core stepper computation
  - This is independent from a concrete computational context like IO to keep things modular
- - Through the environment, the computation will take in inputs through its input stream and output messages as a result of the computation
+ - Through the environment, the computation will take in inputs through its input buffer and output messages through its output buffer
  -}
 step :: Computation ()
 step = do
