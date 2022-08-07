@@ -4,6 +4,13 @@
 
 module CodeGenerator where
 
+import Control.Lens (use, view, (%=), (+=), (.=))
+import Control.Monad (when)
+import Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
+import Control.Monad.Trans.Reader (Reader, runReader)
+import Control.Monad.Trans.State (State, evalState)
+import Data.Foldable (traverse_)
+import Data.List.NonEmpty (NonEmpty ((:|)))
 import MachineInstruction
   ( BinaryOperator
       ( Divide,
@@ -56,6 +63,7 @@ import SyntaxTree
     Expression (..),
     Factor (..),
     FormalParameterList,
+    Instruction (..),
     IntSymbolDeclaration (Int),
     MethodDeclaration (..),
     ObjectSymbolDeclaration (Object),
@@ -479,9 +487,10 @@ instance ContextGeneratable ClassID MethodDeclaration where
             Just (SymbolEntry _ _ pos) ->
               if rp `elem` pl || rp == thisParam
                 then return []
-                else do -- generate init instructions for return symbol
-                prefixlength += 2
-                return [PushInt (-1), StoreStack pos]
+                else do
+                  -- generate init instructions for return symbol
+                  prefixlength += 2
+                  return [PushInt (-1), StoreStack pos]
     -- Generate instructions for the method itself
     methodInstructions <- contextGenerator METHOD c
     {- Create necessary instructions for return -}
@@ -574,9 +583,10 @@ instance ContextGeneratable ProcKind ProcedureDeclaration where
             Just (SymbolEntry _ _ pos) ->
               if rp `elem` pl
                 then return []
-                else do -- generate init instructions for return symbol
-                prefixlength += 2
-                return [PushInt (-1), StoreStack pos]
+                else do
+                  -- generate init instructions for return symbol
+                  prefixlength += 2
+                  return [PushInt (-1), StoreStack pos]
     -- IF INIT procedure: generate memory allocation instructions and update prefix accordingly
     heapMemoryAllocationInstructions <- case kind of
       INIT -> do
@@ -596,8 +606,9 @@ instance ContextGeneratable ProcKind ProcedureDeclaration where
                     let fieldInitCmds = concatMap inits ft
                     prefixlength += length fieldInitCmds
                     return $ [AllocateHeap (length ft) cid, StoreStack p] ++ fieldInitCmds
-                    where inits (FieldEntry _ (OBJ _) heapFrameIndex) = [LoadStack p, PushInt (-1), StoreHeap heapFrameIndex]
-                          inits (FieldEntry _ INT heapFrameIndex) = [LoadStack p, PushInt 0, StoreHeap heapFrameIndex]
+                    where
+                      inits (FieldEntry _ (OBJ _) heapFrameIndex) = [LoadStack p, PushInt (-1), StoreHeap heapFrameIndex]
+                      inits (FieldEntry _ INT heapFrameIndex) = [LoadStack p, PushInt 0, StoreHeap heapFrameIndex]
       _ -> return []
     -- generate the instructions
     procedureInstructions <- contextGenerator PROCEDURE c
