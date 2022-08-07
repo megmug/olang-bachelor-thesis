@@ -47,18 +47,10 @@ import MachineInstruction
     MethodID,
     UnaryOperator (Not),
   )
-import Control.Lens (use, view, (%=), (+=), (.=))
-import Control.Monad (when)
-import Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
-import Control.Monad.Trans.Reader (Reader, runReader)
-import Control.Monad.Trans.State (State, evalState)
-import Data.Foldable (traverse_)
-import Data.List.NonEmpty (NonEmpty ((:|)))
 import SyntaxTree
   ( Call (..),
     ClassDeclaration (..),
     ClassName,
-    Instruction (..),
     Condition (..),
     Expression (..),
     Factor (..),
@@ -134,14 +126,11 @@ data GenState = GenState PrefixLength SymTable ProcTable ClassTable
 -- The typifier essentially shares the code generator's state, but doesn't need to know the current prefix
 data TypeState = TypeState SymTable ProcTable ClassTable
 
--- Every instruction can be in procedure-, method-, main-program- context or inside of an instruction block
-data InstructionContext = PROCEDURE | METHOD | MAIN | INNER
-
 -- Here we define a type for monadic actions that represent the types of our code generators and typifiers
-type GeneratorAction a = ExceptT String (State GenState) a
+type Generator a = ExceptT String (State GenState) a
 
--- A typifier action only needs to read the state, hence the use of Reader instead of State
-type TypifierAction a = ExceptT String (Reader TypeState) a
+-- A typifier only needs to read the state, hence the use of Reader instead of State
+type Typifier a = ExceptT String (Reader TypeState) a
 
 {--}
 
@@ -173,12 +162,12 @@ classtablet f (TypeState st pt ct) = (\ct' -> TypeState st pt ct') <$> f ct
 
 -- ContextGeneratable is meant for syntactical elements that can be compiled, but need additional context information to the GenState alone
 class ContextGeneratable c a where
-  contextGenerator :: c -> a -> GeneratorAction [MachineInstruction.Instruction]
+  contextGenerator :: c -> a -> Generator [MachineInstruction.Instruction]
 
 -- Generatable is for syntactical elements that can be compiled without additional context (apart from the GenState)
 class Generatable a where
   -- A generator creates a monadic action from a syntactical element that can generate code for it
-  generator :: a -> GeneratorAction [MachineInstruction.Instruction]
+  generator :: a -> Generator [MachineInstruction.Instruction]
 
   -- This runs a generator with some supplied state (can also be useful for testing)
   customGenerate :: a -> GenState -> Either String [MachineInstruction.Instruction]
@@ -189,7 +178,7 @@ class Generatable a where
   generate e = customGenerate e $ GenState 0 [] [] []
 
 -- A small helper to output the generator state in case of failure
-throwDiagnosticError :: String -> GeneratorAction a
+throwDiagnosticError :: String -> Generator a
 throwDiagnosticError s = do
   pl <- use prefixlength
   st <- use symtable
@@ -211,14 +200,14 @@ throwDiagnosticError s = do
 {- Type class for representing syntactical structures whose type can be calculated -}
 class Typeable a where
   -- A typifier can typify some object in the context of a TypeState, possibly resulting in a String error
-  typifier :: a -> TypifierAction OptionalType
+  typifier :: a -> Typifier OptionalType
 
   -- Run a typifier, providing a TypeState
   runTypifier :: a -> TypeState -> Either String OptionalType
   runTypifier e s = runReader (runExceptT $ typifier e) s
 
   -- An adapter to conveniently run typifiers in the context of generators (look below for the Generatable class)
-  typify :: a -> GeneratorAction OptionalType
+  typify :: a -> Generator OptionalType
   typify e = do
     st <- use symtable
     pt <- use proctable
@@ -378,9 +367,8 @@ calculateInstructionStackMemoryRequirements _ = 0
 {- Convention: Every generator ensures to clean up its state after itself -}
 instance Generatable Program where
   generator (Program classes procs c) = do
-    let numMethodTables = length classes
-    -- There is 1 jump and additionally 1 method table creation instruction for every class at the start of the program
-    prefixlength += numMethodTables
+    -- There is 1 method table creation instruction for every class at the start of the program
+    prefixlength += length classes
     classInstructions <- traverse generator classes
     procInstructions <- traverse (contextGenerator NORMAL) procs
     -- reserve stack memory for variable declarations in main program
@@ -388,7 +376,7 @@ instance Generatable Program where
     prefixlength += length mainStackMemoryAllocationInstructions
     mainProgram <- contextGenerator MAIN c
     ct <- use classtable
-    let programInstructions = getMTables ct ++ concat classInstructions ++ concat procInstructions ++ mainStackMemoryAllocationInstructions ++ mainProgram ++ [Halt]
+    let programInstructions = map getMTableInstruction ct ++ concat classInstructions ++ concat procInstructions ++ mainStackMemoryAllocationInstructions ++ mainProgram ++ [Halt]
     {- set state accordingly (not strictly necessary, but for sake of consistency with other generators, we do it none the less) -}
     prefixlength .= length programInstructions
     symtable .= []
@@ -397,8 +385,7 @@ instance Generatable Program where
     {--}
     return programInstructions
     where
-      getMTables ct = map getMTable ct
-      getMTable (cid, ClassEntry _ _ _ mt) = CreateMethodTable cid (map getMethodAddress mt)
+      getMTableInstruction (cid, ClassEntry _ _ _ mt) = CreateMethodTable cid (map getMethodAddress mt)
       getMethodAddress (cid, ProcEntry _ a) = (cid, a)
 
 instance Generatable ClassDeclaration where
@@ -426,7 +413,7 @@ instance Generatable ClassDeclaration where
     methodInstructions <- traverse (contextGenerator newClassID) methods
     return $ initInstructions ++ concat methodInstructions
     where
-      addFieldToClassEntry :: ClassID -> SymbolDeclaration -> GeneratorAction ()
+      addFieldToClassEntry :: ClassID -> SymbolDeclaration -> Generator ()
       addFieldToClassEntry cid sd = do
         ct <- use classtable
         case lookup cid ct of
@@ -510,7 +497,7 @@ instance ContextGeneratable ClassID MethodDeclaration where
     newPrefix <- use prefixlength
     return $ [Jump newPrefix] ++ concat subProcedureInstructions ++ stackMemoryAllocationInstructions ++ returnParameterInitInstructions ++ methodInstructions ++ returnInstructions
     where
-      updateClassTableWithNewMethod :: ClassID -> ProcEntry -> GeneratorAction ()
+      updateClassTableWithNewMethod :: ClassID -> ProcEntry -> Generator ()
       updateClassTableWithNewMethod cid' pe@(ProcEntry s _) = do
         ct <- use classtable
         case lookup cid' ct of
@@ -737,6 +724,9 @@ instance Typeable Call where
         -- again, the lookup function does the magic here, we just return its result
         Right (_, ProcEntry (Signature _ _ rt) _) -> return rt
 
+-- Every instruction can be in procedure-, method-, main-program- context or inside of an instruction block
+data InstructionContext = PROCEDURE | METHOD | MAIN | INNER
+
 instance ContextGeneratable InstructionContext SyntaxTree.Instruction where
   contextGenerator ctxt (Assignment (NameReference n) e) = do
     ct <- use classtable
@@ -886,7 +876,7 @@ instance ContextGeneratable InstructionContext SyntaxTree.Instruction where
  - For example, the following should be illegal:
  - PROCEDURE foo(VAR x) { { VAR Y } Y := 0 }
  -}
-updateSymbolTableDependingOnInstructionContext :: InstructionContext -> SymTable -> GeneratorAction ()
+updateSymbolTableDependingOnInstructionContext :: InstructionContext -> SymTable -> Generator ()
 updateSymbolTableDependingOnInstructionContext INNER _ = return ()
 updateSymbolTableDependingOnInstructionContext _ st = symtable .= st
 
