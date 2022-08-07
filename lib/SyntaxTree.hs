@@ -3,6 +3,7 @@ module SyntaxTree where
 import Data.List.NonEmpty (NonEmpty)
 
 {-# ANN module ("hlint: ignore Use lambda-case") #-}
+
 {-# ANN module ("hlint: ignore Use newtype instead of data") #-}
 
 {- There is a type for all important nonterminals in the grammar

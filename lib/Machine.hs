@@ -585,15 +585,15 @@ runProgramIO cs = case createMachine cs of
 
 runIO :: Machine -> IO ()
 runIO m = case runState (runExceptT run) m of
-    (Right (), _) -> return ()
-    (Left "CONTROL:IN", m') -> do
-      l <- getLine
-      runIO $ set inbuffer [l] m'
-    (Left "CONTROL:OUT", m') -> do
-      let out = view outbuffer m'
-      putStr $ concat out
-      runIO (set outbuffer [] m')
-    (Left e, _) -> error e
+  (Right (), _) -> return ()
+  (Left "CONTROL:IN", m') -> do
+    l <- getLine
+    runIO $ set inbuffer [l] m'
+  (Left "CONTROL:OUT", m') -> do
+    let out = view outbuffer m'
+    putStr $ concat out
+    runIO (set outbuffer [] m')
+  (Left e, _) -> error e
 
 runTest :: Machine -> Either String String
 runTest m = case runState (runExceptT run) m of
@@ -603,8 +603,8 @@ runTest m = case runState (runExceptT run) m of
 
 runTraceIO :: [Instruction] -> IO ()
 runTraceIO cs = case createMachine cs of
-    Nothing -> error "invalid machine code"
-    Just m -> stepIOWithTraceUntilHalted m 0 False FULL
+  Nothing -> error "invalid machine code"
+  Just m -> stepIOWithTraceUntilHalted m 0 False FULL
   where
     stepIOWithTraceUntilHalted m n generateLatex latexLevel = do
       printInfo m n generateLatex latexLevel
@@ -618,20 +618,20 @@ runTraceIO cs = case createMachine cs of
 
     printInfo m stepNum True l = putStrLn $ showLatexTableRow l stepNum m
     printInfo m stepNum False _ = do
-          putStrLn ("Machine runtime: " ++ show stepNum)
-          print m
-          putStrLn ""
+      putStrLn ("Machine runtime: " ++ show stepNum)
+      print m
+      putStrLn ""
 
 stepIO :: Machine -> IO Machine
 stepIO m = case runState (runExceptT step) m of
-    (Left "CONTROL:IN", m') -> do
-      l <- getLine
-      let m'' = set inbuffer [l] m'
-      return m''
-    (Left "CONTROL:OUT", m') -> do
-      putStr $ concat $ view outbuffer m'
-      return $ set outbuffer [] m'
-    (Left e, _) -> error e
-    (Right (), m') -> return m'
+  (Left "CONTROL:IN", m') -> do
+    l <- getLine
+    let m'' = set inbuffer [l] m'
+    return m''
+  (Left "CONTROL:OUT", m') -> do
+    putStr $ concat $ view outbuffer m'
+    return $ set outbuffer [] m'
+  (Left e, _) -> error e
+  (Right (), m') -> return m'
 
 {--}

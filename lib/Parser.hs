@@ -8,11 +8,11 @@ import SyntaxTree
   ( ActualParameterList,
     Call (..),
     ClassDeclaration (..),
-    Instruction (..),
     Condition (..),
     Expression (..),
     Factor (..),
     FormalParameterList,
+    Instruction (..),
     IntSymbolDeclaration (Int),
     MethodDeclaration (..),
     ObjectSymbolDeclaration (Object),
@@ -39,7 +39,9 @@ import Text.Parsec.Prim
 import Token (Token (..), TokenPos)
 
 {-# ANN module ("hlint: ignore Use $>") #-}
+
 {-# ANN module ("hlint: ignore Use <$") #-}
+
 {-# ANN module ("hlint: ignore Use lambda-case") #-}
 
 -- a parser generates some output by consuming a list of tokens + positions

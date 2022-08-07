@@ -17,8 +17,8 @@ type ClassID = Int
 type MethodID = Int
 
 data Instruction
-  {-- Core machine instructions --}
-  = PushInt Integer
+  = {-- Core machine instructions --}
+    PushInt Integer
   | LoadStack StackAddress
   | StoreStack StackAddress
   | CombineUnary UnaryOperator
@@ -30,11 +30,11 @@ data Instruction
   | PrintStr String
   | PrintStrLn String
   | Halt
-  {-- Instructions for procedure support --}
-  | CallProcedure CodeAddress Int
+  | {-- Instructions for procedure support --}
+    CallProcedure CodeAddress Int
   | Return Bool
-  {-- Instructions for support of object-oriented features --}
-  | LoadHeap FieldIndex
+  | {-- Instructions for support of object-oriented features --}
+    LoadHeap FieldIndex
   | StoreHeap FieldIndex
   | AllocateHeap Int ClassID
   | CreateMethodTable ClassID [(MethodID, CodeAddress)]
