@@ -577,29 +577,42 @@ runProgramTest :: [Instruction] -> InputBuffer -> Either String String
 runProgramTest cs s = case createMachineWithInput cs s of
   Nothing -> Left "invalid machine code"
   Just m -> runTest m
+  where
+    runTest m = case runState (runExceptT run) m of
+      (Right (), m') -> Right $ concat $ view outbuffer m'
+      (Left "CONTROL:OUT", m') -> runTest m'
+      (Left e, _) -> error e
 
 runProgramIO :: [Instruction] -> IO ()
 runProgramIO cs = case createMachine cs of
   Nothing -> error "invalid machine code"
   Just m -> runIO m
+  where
+    runIO m = case runState (runExceptT run) m of
+      (Right (), _) -> return ()
+      (Left "CONTROL:IN", m') -> do
+        l <- getLine
+        runIO $ set inbuffer [l] m'
+      (Left "CONTROL:OUT", m') -> do
+        let out = view outbuffer m'
+        putStr $ concat out
+        runIO (set outbuffer [] m')
+      (Left e, _) -> error e
 
-runIO :: Machine -> IO ()
-runIO m = case runState (runExceptT run) m of
-  (Right (), _) -> return ()
-  (Left "CONTROL:IN", m') -> do
-    l <- getLine
-    runIO $ set inbuffer [l] m'
-  (Left "CONTROL:OUT", m') -> do
-    let out = view outbuffer m'
-    putStr $ concat out
-    runIO (set outbuffer [] m')
-  (Left e, _) -> error e
-
-runTest :: Machine -> Either String String
-runTest m = case runState (runExceptT run) m of
-  (Right (), m') -> Right $ concat $ view outbuffer m'
-  (Left "CONTROL:OUT", m') -> runTest m'
-  (Left e, _) -> error e
+generateLatexTrace :: [Instruction] -> InputBuffer -> LatexShowMode -> Maybe String
+generateLatexTrace prog buf mode = case createMachineWithInput prog buf of
+  Nothing -> Nothing
+  Just m -> Just $ generateTraceFrom m 0
+  where
+    generateTraceFrom m' n =
+      showLatexTableRow mode n m'
+        ++ "\n"
+        ++ if isHalted m'
+          then []
+          else case runState (runExceptT step) m' of
+            (Right (), m'') -> generateTraceFrom m'' (n + 1)
+            (Left "CONTROL:OUT", m'') -> generateTraceFrom m'' (n + 1)
+            (Left e, _) -> error e
 
 runTraceIO :: [Instruction] -> IO ()
 runTraceIO cs = case createMachine cs of
@@ -622,16 +635,15 @@ runTraceIO cs = case createMachine cs of
       print m
       putStrLn ""
 
-stepIO :: Machine -> IO Machine
-stepIO m = case runState (runExceptT step) m of
-  (Left "CONTROL:IN", m') -> do
-    l <- getLine
-    let m'' = set inbuffer [l] m'
-    return m''
-  (Left "CONTROL:OUT", m') -> do
-    putStr $ concat $ view outbuffer m'
-    return $ set outbuffer [] m'
-  (Left e, _) -> error e
-  (Right (), m') -> return m'
+    stepIO m = case runState (runExceptT step) m of
+      (Left "CONTROL:IN", m') -> do
+        l <- getLine
+        let m'' = set inbuffer [l] m'
+        return m''
+      (Left "CONTROL:OUT", m') -> do
+        putStr $ concat $ view outbuffer m'
+        return $ set outbuffer [] m'
+      (Left e, _) -> error e
+      (Right (), m') -> return m'
 
 {--}
