@@ -391,7 +391,6 @@ instance Generatable Program where
       Halt
   -}
   generator (Program classes procedures main) = do
-    prefixLength += length classes
     {-
       # side effects:
       # - populate class table
@@ -399,21 +398,23 @@ instance Generatable Program where
       # - increase prefix length
     -}
     classInstructions <- traverse generator classes
-    methodTableInstructions <- generateMethodTableInstructions
     {-
       # side effects:
       # - populate procedure table
       # - increase prefix length
     -}
     procedureInstructions <- traverse (contextGenerator NORMAL) procedures
-    let stackMemoryAllocationInstructions = replicate (calculateInstructionStackMemoryRequirements main) (PushInt 0)
-    prefixLength += length stackMemoryAllocationInstructions
-    mainProgram <- contextGenerator MAIN main
-    return $ methodTableInstructions
-        ++ concat classInstructions
+    let requiredStackMemory = calculateInstructionStackMemoryRequirements main
+    let stackMemoryAllocationInstructions = replicate requiredStackMemory (PushInt 0)
+    prefixLength += requiredStackMemory
+    methodTableInstructions <- generateMethodTableInstructions
+    prefixLength += length methodTableInstructions
+    mainProgramInstructions <- contextGenerator MAIN main
+    return $ concat classInstructions
         ++ concat procedureInstructions
         ++ stackMemoryAllocationInstructions
-        ++ mainProgram
+        ++ methodTableInstructions
+        ++ mainProgramInstructions
         ++ [Halt]
 
 instance Generatable ClassDeclaration where
