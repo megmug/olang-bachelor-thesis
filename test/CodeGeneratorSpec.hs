@@ -2,7 +2,7 @@ module CodeGeneratorSpec where
 
 import CodeGenerator
   ( Generatable (generate),
-    calculateInstructionStackMemoryRequirements,
+    calculateStackMemoryRequirement,
   )
 import Data.Either (fromRight, isLeft, isRight)
 import Parser (Parseable (parse))
@@ -26,7 +26,7 @@ spec = do
     describe "instructions" $ do
       it "can count simple instruction mem requirements correctly" $
         do
-          calculateInstructionStackMemoryRequirements
+          calculateStackMemoryRequirement
             ( unsafeParseInstruction
                 "{ INT m \
                 \ m := 2 \
@@ -38,14 +38,14 @@ spec = do
                 SyntaxTree.Instruction
             )
             `shouldBe` 1
-          calculateInstructionStackMemoryRequirements
+          calculateStackMemoryRequirement
             ( unsafeParseInstruction
                 "{ INT m \
                 \ INT n }" ::
                 SyntaxTree.Instruction
             )
             `shouldBe` 2
-          calculateInstructionStackMemoryRequirements
+          calculateStackMemoryRequirement
             ( unsafeParseInstruction
                 "{ }" ::
                 SyntaxTree.Instruction
@@ -53,10 +53,10 @@ spec = do
             `shouldBe` 0
       it "can calculate complicated instruction mem requirements correctly" $
         do
-          calculateInstructionStackMemoryRequirements (unsafeParseInstruction "{INT m {INT n}}") `shouldBe` 2
-          calculateInstructionStackMemoryRequirements (unsafeParseInstruction "{{INT n} INT m}") `shouldBe` 1
-          calculateInstructionStackMemoryRequirements (unsafeParseInstruction "{INT m {INT n} INT l}") `shouldBe` 2
-          calculateInstructionStackMemoryRequirements (unsafeParseInstruction "{INT m {INT n INT k} INT l}") `shouldBe` 3
+          calculateStackMemoryRequirement (unsafeParseInstruction "{INT m {INT n}}") `shouldBe` 2
+          calculateStackMemoryRequirement (unsafeParseInstruction "{{INT n} INT m}") `shouldBe` 1
+          calculateStackMemoryRequirement (unsafeParseInstruction "{INT m {INT n} INT l}") `shouldBe` 2
+          calculateStackMemoryRequirement (unsafeParseInstruction "{INT m {INT n INT k} INT l}") `shouldBe` 3
 
   describe "compiling test programs" $ do
     it "can compile divzero program" $ do
@@ -65,6 +65,10 @@ spec = do
 
     it "can not compile illegalreference program" $ do
       prog <- readFile "resources/test-programs/illegalreference.olang"
+      unsafeGenerate prog `shouldSatisfy` isLeft
+
+    it "can not compile return incompatible shadow program" $ do
+      prog <- readFile "resources/test-programs/return-param-shadowed-by-incompatible-type.olang"
       unsafeGenerate prog `shouldSatisfy` isLeft
 
     it "can compile primes-bounded program" $ do

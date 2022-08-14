@@ -1,0 +1,10 @@
+USING [
+    CLASS Intbox(INT i)
+    FIELDS INT i
+    INIT { this.i := i }
+
+    PROCEDURE test() RETURNS OBJ Intbox ret INT ret
+] DO {
+    OBJ Intbox b
+    b := test()
+}
