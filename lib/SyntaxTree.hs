@@ -14,8 +14,6 @@ type ClassName = String
 
 type SymbolName = String
 
-type Initializer = Instruction
-
 type ActualParameterList = [Expression]
 
 type FormalParameterList = [SymbolDeclaration]
@@ -33,7 +31,7 @@ data ClassDeclaration
       FormalParameterList
       (Maybe ClassName)
       [SymbolDeclaration]
-      Initializer
+      Instruction
       [MethodDeclaration]
   deriving (Eq, Show)
 
@@ -58,6 +56,22 @@ data ProcedureHeader
       [ProcedureDeclaration]
   deriving (Eq, Show)
 
+data Instruction
+  {- Basic instructions -}
+  = Assignment SymbolReference Expression
+  | SymbolDeclarationInstruction SymbolDeclaration
+  | CallInstruction Call
+  | Read SymbolName
+  | PrintI Expression
+  | PrintS String
+  | PrintLnS String
+  | Error
+  {- Composite instructions -}
+  | Block (NonEmpty Instruction)
+  | IfThen Condition Instruction
+  | While Condition Instruction
+  deriving (Eq, Show)
+
 data Call
   = SymbolReference SymbolReference
   | Call SymbolReference ActualParameterList
@@ -66,20 +80,6 @@ data Call
 data SymbolReference
   = NameReference SymbolName
   | FieldReference SymbolName SymbolName
-  deriving (Eq, Show)
-
-data Instruction
-  = Assignment SymbolReference Expression
-  | SymbolDeclarationInstruction SymbolDeclaration
-  | CallInstruction Call
-  | Read SymbolName
-  | Block (NonEmpty Instruction)
-  | IfThen Condition Instruction
-  | While Condition Instruction
-  | PrintI Expression
-  | PrintS String
-  | PrintLnS String
-  | Error
   deriving (Eq, Show)
 
 data Condition

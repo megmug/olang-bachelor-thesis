@@ -1,6 +1,10 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeSynonymInstances #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
+{-# HLINT ignore "Eta reduce" #-}
+{-# HLINT ignore "Avoid lambda"#-}
 
 module CodeGenerator where
 
@@ -66,11 +70,10 @@ import SyntaxTree
     Relation (Equals, Greater, Smaller),
     Sign (Minus, Plus),
     SymbolDeclaration (IntDeclaration, ObjectDeclaration),
+    SymbolName,
     SymbolReference (FieldReference, NameReference),
     Term (..),
   )
-
-{-# ANN module ("hlint: ignore Avoid lambda") #-}
 
 {- Basic helper type definitions -}
 -- A symbol has a name, a type as well as a position in the local variable segment on the stack
@@ -344,9 +347,9 @@ isIntType (Just INT) = True
 isIntType (Just (OBJ _)) = False
 
 -- This function calculates the required memory a procedure needs to allocate for local variables declared in its code
-calculateInstructionStackMemoryRequirements :: SyntaxTree.Instruction -> Int
-calculateInstructionStackMemoryRequirements (SymbolDeclarationInstruction _) = 1
-calculateInstructionStackMemoryRequirements (Block (c :| [])) = calculateInstructionStackMemoryRequirements c
+calculateStackMemoryRequirement :: SyntaxTree.Instruction -> Int
+calculateStackMemoryRequirement (SymbolDeclarationInstruction _) = 1
+calculateStackMemoryRequirement (Block (c :| [])) = calculateStackMemoryRequirement c
 {- If a block has at least 2 instructions, the memory required is determined by the question if the first instruction is a block, too.
  - This is because of how blocks are compiled:
  - After compiling a block, its symbols get flushed from the table again because they should not be visible from outside
@@ -354,29 +357,332 @@ calculateInstructionStackMemoryRequirements (Block (c :| [])) = calculateInstruc
  - So if the (inner) block needs more space than the following instructions, its memory requirement is dominant
  - Otherwise the requirement of the following instructions is dominant - so we calculate the max value of both
  -}
-calculateInstructionStackMemoryRequirements (Block (c :| (c' : cs))) = case c of
-  Block _ -> max (calculateInstructionStackMemoryRequirements c) (calculateInstructionStackMemoryRequirements $ Block $ c' :| cs)
-  _ -> calculateInstructionStackMemoryRequirements c + calculateInstructionStackMemoryRequirements (Block $ c' :| cs)
-calculateInstructionStackMemoryRequirements (IfThen _ c) = calculateInstructionStackMemoryRequirements c
-calculateInstructionStackMemoryRequirements (While _ c) = calculateInstructionStackMemoryRequirements c
-calculateInstructionStackMemoryRequirements _ = 0
+calculateStackMemoryRequirement (Block (c :| (c' : cs))) = case c of
+  Block _ -> max (calculateStackMemoryRequirement c) (calculateStackMemoryRequirement $ Block $ c' :| cs)
+  _ -> calculateStackMemoryRequirement c + calculateStackMemoryRequirement (Block $ c' :| cs)
+calculateStackMemoryRequirement (IfThen _ c) = calculateStackMemoryRequirement c
+calculateStackMemoryRequirement (While _ c) = calculateStackMemoryRequirement c
+calculateStackMemoryRequirement _ = 0
 
 {--}
 
 {- Helper generators -}
 generateMethodTableInstructions :: Generator [MachineInstruction.Instruction]
 generateMethodTableInstructions = do
-    ct <- use classTable
-    return $ map generateMethodTableInstruction ct
-    where
-      generateMethodTableInstruction (cid, ClassEntry _ _ _ mt) = CreateMethodTable cid (map getMethodAddress mt)
-      getMethodAddress (cid, ProcedureEntry _ a) = (cid, a)
+  ct <- use classTable
+  return $ map generateMethodTableInstruction ct
+  where
+    generateMethodTableInstruction (cid, ClassEntry _ _ _ mt) = CreateMethodTable cid (map getMethodAddress mt)
+    getMethodAddress (cid, ProcedureEntry _ a) = (cid, a)
+
+createClassTableEntry :: ClassName -> Maybe ClassName -> [SymbolDeclaration] -> Generator ClassID
+createClassTableEntry name muname fields = do
+  {- Generate template class table entry with inheritance information and add fields -}
+  ct <- use classTable
+  let newClassID = length ct
+  -- With the template, we implement inheritance
+  template <-
+    ( case muname of
+        -- IF there is not an upper class, create empty class template
+        Nothing -> return $ ClassEntry name Nothing [] []
+        -- IF there IS an upper class, we essentially copy its fields and methods into our template
+        Just uname -> case lookupClassByName uname ct of
+          Nothing -> throwE $ "invalid upper class " ++ uname ++ " for class " ++ name
+          (Just (uid, ClassEntry _ _ uft umt)) -> return $ ClassEntry name (Just uid) uft umt
+      )
+  -- Now we add the template into the class table and also add the fields
+  classTable .= (newClassID, template) : ct
+  traverse_ (addFieldToClassEntry newClassID) fields
+  return newClassID
+  where
+    addFieldToClassEntry :: ClassID -> SymbolDeclaration -> Generator ()
+    addFieldToClassEntry cid sd = do
+      ct <- use classTable
+      case lookup cid ct of
+        Nothing -> throwDiagnosticError "BUG encountered: trying to add field to non-existing class!"
+        Just (ClassEntry cn ucc ft mt) -> case sd of
+          IntDeclaration (Int sn) -> classTable %= replaceClassInTable cid (ClassEntry cn ucc (FieldEntry sn INT (length ft) : ft) mt)
+          ObjectDeclaration (Object t sn) -> case lookupClassByName t ct of
+            Nothing -> throwE $ "field " ++ sn ++ " of class " ++ cn ++ " has invalid type " ++ t ++ "!"
+            Just _ -> classTable %= replaceClassInTable cid (ClassEntry cn ucc (FieldEntry sn (OBJ t) (length ft) : ft) mt)
+
+generateInitializer :: ClassName -> FormalParameterList -> SyntaxTree.Instruction -> Generator [MachineInstruction.Instruction]
+generateInitializer name parameters code = do
+  let initProcedure = Procedure (ProcedureHeader ("INIT_" ++ name) parameters (Just $ ObjectDeclaration $ Object name "this") []) code
+  contextGenerator INIT initProcedure
+
+addMethodToClassTable :: ClassID -> SymbolName -> FormalParameterList -> Maybe SymbolDeclaration -> Generator ()
+addMethodToClassTable classID name parameters mReturnParameter = do
+  -- Check for duplicate parameter names
+  when (hasNameCollisions parameters) $ throwE $ "parameter list of procedure " ++ name ++ " has duplicates"
+  a <- use prefixLength
+  let newMethodEntry = ProcedureEntry (Signature name (map symbolDeclToType parameters) (symbolDeclToType <$> mReturnParameter)) a
+  updateClassTableWithNewMethod classID newMethodEntry
+  where
+    updateClassTableWithNewMethod :: ClassID -> ProcedureEntry -> Generator ()
+    updateClassTableWithNewMethod cid' pe@(ProcedureEntry s _) = do
+      ct <- use classTable
+      case lookup cid' ct of
+        Nothing -> throwDiagnosticError "BUG encountered: method has no corresponding class!"
+        Just (ClassEntry cn ucid ft mt) -> case lookupOverridableMethod ct s mt of
+          -- If an overridable method doesn't exist yet, this method is new and can just be added with a new ID
+          Nothing -> classTable .= replaceClassInTable cid' (ClassEntry cn ucid ft ((length mt, pe) : mt)) ct
+          -- Otherwise, override the method from upper class with the same ID!
+          Just (mid, ProcedureEntry _ _) -> classTable .= replaceClassInTable cid' (ClassEntry cn ucid ft (replaceMethodInTable mid pe mt)) ct
+
+    replaceMethodInTable :: MethodID -> ProcedureEntry -> MethodTable -> MethodTable
+    replaceMethodInTable mid pe mt = (mid, pe) : filter ((/=) mid . fst) mt
+
+    lookupOverridableMethod :: ClassTable -> Signature -> MethodTable -> Maybe (MethodID, ProcedureEntry)
+    lookupOverridableMethod _ _ [] = Nothing
+    lookupOverridableMethod ct s ((mid, p@(ProcedureEntry s' _)) : mt) =
+      if overridesSig ct s s'
+        then Just (mid, p)
+        else lookupOverridableMethod ct s mt
+      where
+        overridesSig ct' (Signature mname ts rt) (Signature mname' ts' rt') = mname == mname' && ts == ts' && overridesRet ct' rt rt'
+        overridesRet _ Nothing Nothing = True
+        overridesRet _ Nothing (Just _) = False
+        overridesRet _ (Just _) Nothing = False
+        overridesRet ct' (Just t) (Just t') = isSubtypeOf ct' t t'
+
+addMethodParametersToSymbolTable :: ClassID -> FormalParameterList -> Maybe SymbolDeclaration -> Generator SymbolDeclaration
+addMethodParametersToSymbolTable classID parameters mReturnParameter = do
+  ct <- use classTable
+  thisParam <- case lookup classID ct of
+    Nothing -> throwDiagnosticError "BUG encountered: method has no corresponding class!"
+    Just (ClassEntry cn _ _ _) -> return $ ObjectDeclaration $ Object cn "this"
+  let params =
+        thisParam : case mReturnParameter of
+          Nothing -> parameters
+          Just rp -> if rp `elem` parameters || rp == thisParam then parameters else parameters ++ [rp]
+  st <- use symbolTable
+  symbolTable .= addParamsToSymbols st params
+  return thisParam
+
+generateStackMemoryAllocationInstructions :: FormalParameterList -> Maybe SymbolDeclaration -> SyntaxTree.Instruction -> Generator [MachineInstruction.Instruction]
+generateStackMemoryAllocationInstructions parameters mReturnParameter code = do
+  prefixLength += stackMemoryRequirements
+  return $ replicate stackMemoryRequirements (PushInt 0)
+  where
+    stackMemoryRequirements =
+      calculateStackMemoryRequirement code + case mReturnParameter of
+        Nothing -> 0
+        -- if return parameter is not in parameter list, allocate a stack cell for it, too
+        Just rp -> if rp `elem` parameters then 0 else 1
+
+generateMethodReturnParameterInitInstructions :: SymbolDeclaration -> FormalParameterList -> Maybe SymbolDeclaration -> Generator [MachineInstruction.Instruction]
+generateMethodReturnParameterInitInstructions thisParameter parameters mReturnParameter = case mReturnParameter of
+  Nothing -> return []
+  Just (IntDeclaration _) -> return [] -- Int return parameter doesn't need to be initialized b.c. it is already 0
+  Just rp@(ObjectDeclaration (Object _ p)) -> do
+    st' <- use symbolTable
+    case lookupSymbol st' p of
+      Nothing -> throwDiagnosticError "BUG encountered: return parameter missing from symbols!"
+      Just (SymbolEntry _ _ pos) ->
+        if rp `elem` parameters || rp == thisParameter
+          then return []
+          else do
+            -- generate init instructions for return symbol
+            prefixLength += 2
+            return [PushInt (-1), StoreStack pos]
+
+generateReturnInstructions :: Maybe SymbolDeclaration -> Generator [MachineInstruction.Instruction]
+generateReturnInstructions mReturnParameter = do
+  st <- use symbolTable
+  instructions <- case mReturnParameter of
+    Nothing -> return [Return False]
+    Just rp -> case lookupSymbol st (getSymbolDeclName rp) of
+      Nothing -> throwDiagnosticError "BUG encountered: return parameter missing from symbols!"
+      Just (SymbolEntry _ t p) -> do
+        -- check if return parameter was shadowed by variable of incompatible type!
+        checkTypeCompatibility (Just t) (symbolDeclToType rp)
+        return [LoadStack p, Return True]
+  prefixLength += length instructions
+  return instructions
+
+addToProcedureTable :: SymbolName -> FormalParameterList -> Maybe SymbolDeclaration -> Generator ()
+addToProcedureTable name parameters mReturnParameter = do
+  -- Check for duplicate parameter names
+  when (hasNameCollisions parameters) $ throwE $ "parameter list of procedure " ++ name ++ " has duplicates"
+  pt <- use procedureTable
+  prefix <- use prefixLength
+  -- Address of new procedure must be the old prefix + 1, because of the jump instruction at the beginning that must be skipped
+  let newProcedureEntry = ProcedureEntry (Signature name (map symbolDeclToType parameters) (symbolDeclToType <$> mReturnParameter)) prefix
+  -- Update state with new procedure entry
+  procedureTable .= newProcedureEntry : pt
+
+addProcedureParametersToSymbolTable :: FormalParameterList -> Maybe SymbolDeclaration -> Generator ()
+addProcedureParametersToSymbolTable parameters mReturnParameter = do
+  let params = case mReturnParameter of
+        Nothing -> parameters
+        Just rp -> if rp `elem` parameters then parameters else parameters ++ [rp]
+  st <- use symbolTable
+  symbolTable .= addParamsToSymbols st params
+
+generateProcedureReturnParameterInitInstructions :: FormalParameterList -> Maybe SymbolDeclaration -> Generator [MachineInstruction.Instruction]
+generateProcedureReturnParameterInitInstructions parameters mReturnParameter = do
+  case mReturnParameter of
+    Nothing -> return []
+    Just (IntDeclaration _) -> return [] -- Int return parameter doesn't need to be initialized b.c. it is already 0
+    Just rp@(ObjectDeclaration (Object _ p)) -> do
+      ct' <- use symbolTable
+      case lookupSymbol ct' p of
+        Nothing -> throwDiagnosticError "BUG encountered: return parameter missing from symbols!"
+        Just (SymbolEntry _ _ pos) ->
+          if rp `elem` parameters
+            then return []
+            else do
+              -- generate init instructions for return symbol
+              prefixLength += 2
+              return [PushInt (-1), StoreStack pos]
+
+generateHeapMemoryAllocationInstructions :: ProcedureKind -> Maybe SymbolDeclaration -> Generator [MachineInstruction.Instruction]
+generateHeapMemoryAllocationInstructions INIT mReturnParameter = do
+  stWithParams <- use symbolTable
+  prefixLength += 2
+  case mReturnParameter of
+    Nothing -> throwDiagnosticError "BUG encountered: initializer without return value!"
+    Just rp -> case lookupSymbol stWithParams (getSymbolDeclName rp) of
+      Nothing -> throwDiagnosticError "BUG encountered: return parameter missing from symbols!"
+      Just (SymbolEntry _ t p) -> case t of
+        INT -> throwDiagnosticError "BUG encountered: initializer with INT return value!"
+        OBJ s -> do
+          ct <- use classTable
+          case lookupClassByName s ct of
+            Nothing -> throwDiagnosticError "BUG encountered: initializer with invalid return type!"
+            -- generate heap allocation instructions, along with instructions to correctly initialize all fields
+            Just (cid, ClassEntry _ _ ft _) -> do
+              let fieldInitCmds = concatMap inits ft
+              prefixLength += length fieldInitCmds
+              return $ [AllocateHeap (length ft) cid, StoreStack p] ++ fieldInitCmds
+              where
+                inits (FieldEntry _ (OBJ _) heapFrameIndex) = [LoadStack p, PushInt (-1), StoreHeap heapFrameIndex]
+                inits (FieldEntry _ INT heapFrameIndex) = [LoadStack p, PushInt 0, StoreHeap heapFrameIndex]
+generateHeapMemoryAllocationInstructions _ _ = return []
+
+lookupSymbolTypeByNameT :: SymbolName -> Typifier OptionalType
+lookupSymbolTypeByNameT name = do
+  st <- view symbolTableT
+  case lookupSymbol st name of
+    Nothing -> throwE $ "undefined variable in expression: " ++ name
+    -- an symbol's type is just the type declared in the symbol table
+    Just (SymbolEntry _ t _) -> return $ Just t
+
+lookupFieldTypeByTypeAndFieldName :: OptionalType -> SymbolName -> Typifier OptionalType
+lookupFieldTypeByTypeAndFieldName mt field = do
+  ct <- view classTableT
+  case mt of
+    Nothing -> throwE ""
+    Just INT -> throwE ""
+    Just (OBJ cname) -> case lookupClassByName cname ct of
+      Nothing -> throwE $ "BUG encountered: invalid class " ++ cname ++ "!"
+      Just (_, ClassEntry _ _ ft _) -> case lookupFieldByName ft field of
+        Nothing -> throwE $ "invalid field " ++ field ++ " reference for class " ++ cname ++ "!"
+        -- a field reference's type is determined by the field type in the class declaration
+        Just (FieldEntry _ t _) -> return $ Just t
+
+lookupSymbolPosByName :: SymbolName -> Generator Position
+lookupSymbolPosByName name = fst <$> lookupSymbolPosAndTypeByName name
+
+lookupSymbolTypeByName :: SymbolName -> Generator Type
+lookupSymbolTypeByName name = snd <$> lookupSymbolPosAndTypeByName name
+
+lookupSymbolPosAndTypeByName :: SymbolName -> Generator (Position, Type)
+lookupSymbolPosAndTypeByName name = do
+  st <- use symbolTable
+  case lookupSymbol st name of
+    Nothing -> throwE $ "undefined symbol " ++ name
+    Just (SymbolEntry _ t pos) -> return (pos, t)
+
+lookupFieldPosByTypeAndFieldName :: Type -> SymbolName -> Generator Position
+lookupFieldPosByTypeAndFieldName t field = do
+  (pos, _) <- lookupFieldPosAndTypeByTypeAndFieldName t field
+  return pos
+
+lookupFieldPosAndTypeByTypeAndFieldName :: Type -> SymbolName -> Generator (Position, Type)
+lookupFieldPosAndTypeByTypeAndFieldName t field = do
+  ct <- use classTable
+  case t of
+    INT -> throwE "trying to access field of a non-object!"
+    OBJ cname -> case lookupClassByName cname ct of
+      Nothing -> throwDiagnosticError $ "BUG encountered: invalid class " ++ cname ++ "!"
+      Just (_, ClassEntry _ _ ft _) -> case lookupFieldByName ft field of
+        Nothing -> throwE $ "invalid field " ++ field ++ " for class " ++ cname ++ "!"
+        Just (FieldEntry _ t' p) -> return (p, t')
+
+calculateMatchingSetMinimumAddressForProcedureInvocation :: SymbolName -> [OptionalType] -> Generator CodeAddress
+calculateMatchingSetMinimumAddressForProcedureInvocation name types = do
+  ct <- use classTable
+  pt <- use procedureTable
+  case sequenceA types of
+    Nothing -> throwE "type error: empty type in parameter hole"
+    Just ts -> case lookupClosestMatchingProc ct pt name ts of
+      Left e -> throwE e
+      Right (ProcedureEntry _ a) -> return a
+
+calculateMatchingSetMinimumTypeForProcedureInvocationT :: SymbolName -> [OptionalType] -> Typifier ReturnType
+calculateMatchingSetMinimumTypeForProcedureInvocationT name types = do
+  ct <- view classTableT
+  pt <- view procedureTableT
+  case sequenceA types of
+    Nothing -> throwE "type error: empty type in parameter hole"
+    Just ts -> case lookupClosestMatchingProc ct pt name ts of
+      Left e -> throwE e
+      Right (ProcedureEntry (Signature _ _ rt) _) -> return rt
+
+calculateMatchingSetMinimumIDForMethodInvocation :: SymbolName -> SymbolName -> [OptionalType] -> Generator MethodID
+calculateMatchingSetMinimumIDForMethodInvocation objName methodName types = do
+  ct <- use classTable
+  st <- use symbolTable
+  case sequenceA types of
+    Nothing -> throwE "type error: empty type in parameter hole!"
+    Just ts -> case lookupClosestMatchingMethod ct st objName methodName ts of
+      Left e -> throwE e
+      Right (mid, ProcedureEntry _ _) -> return mid
+
+calculateMatchingSetMinimumTypeForMethodInvocationT :: SymbolName -> SymbolName -> [OptionalType] -> Typifier ReturnType
+calculateMatchingSetMinimumTypeForMethodInvocationT objName methodName types = do
+  ct <- view classTableT
+  st <- view symbolTableT
+  case sequenceA types of
+    Nothing -> throwE "type error: empty type in parameter hole!"
+    Just ts -> case lookupClosestMatchingMethod ct st objName methodName ts of
+      Left e -> throwE e
+      Right (_, ProcedureEntry (Signature _ _ rt) _) -> return rt
+
+checkTypeCompatibility :: OptionalType -> Type -> Generator ()
+checkTypeCompatibility Nothing _ = throwE "empty type has no supertype"
+checkTypeCompatibility (Just s) t = do
+  ct <- use classTable
+  if isSubtypeOf ct s t
+    then return ()
+    else throwE $ "incompatible types " ++ show s ++ " and " ++ show t ++ "!"
+
+addSymbolToTable :: SymbolName -> Type -> Generator Position
+addSymbolToTable name t = do
+  -- Assemble new symbol entry and add it
+  st <- use symbolTable
+  symbolTable .= addSymbol st name t
+  st' <- use symbolTable
+  -- lookup position of new symbol
+  case lookupSymbol st' name of
+    Nothing -> throwDiagnosticError "BUG encountered: impossibly, the symbol we just added vanished"
+    Just (SymbolEntry _ _ p) -> return p
+
+checkClassValidity :: ClassName -> Generator ()
+checkClassValidity cname = do
+  ct <- use classTable
+  case lookupClassByName cname ct of
+    Nothing -> throwE $ "invalid class " ++ cname ++ " for object " ++ cname
+    Just _ -> return ()
+
 {--}
 
 {- Class instances -}
 {- Convention: Every generator ensures to clean up its state after itself -}
 instance Generatable Program where
-  {- Instruction layout for program:
+  {- Instruction layout for Program:
       CreateMethodTable 0 ...
       ...
       CreateMethodTable n ...
@@ -391,26 +697,23 @@ instance Generatable Program where
       Halt
   -}
   generator (Program classes procedures main) = do
-    {-
-      # side effects:
-      # - populate class table
-      # - add initializers to procedure table
-      # - increase prefix length
-    -}
+    {- side effects:
+       - populate class table
+       - add initializers to procedure table
+       - increase prefix length -}
     classInstructions <- traverse generator classes
-    {-
-      # side effects:
-      # - populate procedure table
-      # - increase prefix length
-    -}
+    {- side effects:
+       - populate procedure table
+       - increase prefix length -}
     procedureInstructions <- traverse (contextGenerator NORMAL) procedures
-    let requiredStackMemory = calculateInstructionStackMemoryRequirements main
+    let requiredStackMemory = calculateStackMemoryRequirement main
     let stackMemoryAllocationInstructions = replicate requiredStackMemory (PushInt 0)
     prefixLength += requiredStackMemory
     methodTableInstructions <- generateMethodTableInstructions
     prefixLength += length methodTableInstructions
-    mainProgramInstructions <- contextGenerator MAIN main
-    return $ concat classInstructions
+    mainProgramInstructions <- generator main
+    return $
+      concat classInstructions
         ++ concat procedureInstructions
         ++ stackMemoryAllocationInstructions
         ++ methodTableInstructions
@@ -418,547 +721,415 @@ instance Generatable Program where
         ++ [Halt]
 
 instance Generatable ClassDeclaration where
-  generator (Class n ps mc fields ini methods) = do
-    {- Generate template class table entry with inheritance information and add fields -}
-    ct <- use classTable
-    let newClassID = length ct
-    -- With the template, we implement inheritance
-    template <-
-      ( case mc of
-          -- IF there is not an upper class, create empty class template
-          Nothing -> return $ ClassEntry n Nothing [] []
-          -- IF there IS an upper class, we essentially copy its fields and methods into our template
-          Just u -> case lookupClassByName u ct of
-            Nothing -> throwE $ "invalid upper class " ++ u ++ " for class " ++ n
-            (Just (uid, ClassEntry _ _ uft umt)) -> return $ ClassEntry n (Just uid) uft umt
-        )
-    -- Now we add the template into the class table and also add the fields
-    classTable .= (newClassID, template) : ct
-    traverse_ (addFieldToClassEntry newClassID) fields
-    {- Generate initializer as procedure with object 'this' as implicit return parameter and preceding memory allocation -}
-    let initProcedure = Procedure (ProcedureHeader ("INIT_" ++ n) ps (Just $ ObjectDeclaration $ Object n "this") []) ini
-    initInstructions <- contextGenerator INIT initProcedure
-    {- Generate methods -}
-    methodInstructions <- traverse (contextGenerator newClassID) methods
+  {- Instruction layout for ClassDeclaration:
+     <code for initializer>
+     <code for method 1>
+     ...
+     <code for method n>
+  -}
+  generator (Class name parameters mUpperClassName fields initializer methods) = do
+    {- side effects:
+       - add new empty class table entry for 'name' with field information
+       - in case of inheritance, copy relevant information from upper class -}
+    classID <- createClassTableEntry name mUpperClassName fields
+    {- side effects:
+       - add initializer procedure to procedure table
+       - increase prefix length -}
+    initInstructions <- generateInitializer name parameters initializer
+    {- side effects:
+       - add methods to corresponding class table
+       - increase prefix length -}
+    methodInstructions <- traverse (contextGenerator classID) methods
     return $ initInstructions ++ concat methodInstructions
-    where
-      addFieldToClassEntry :: ClassID -> SymbolDeclaration -> Generator ()
-      addFieldToClassEntry cid sd = do
-        ct <- use classTable
-        case lookup cid ct of
-          Nothing -> throwDiagnosticError "BUG encountered: trying to add field to non-existing class!"
-          Just (ClassEntry cn ucc ft mt) -> case sd of
-            IntDeclaration (Int sn) -> classTable %= replaceClassInTable cid (ClassEntry cn ucc (FieldEntry sn INT (length ft) : ft) mt)
-            ObjectDeclaration (Object t sn) -> case lookupClassByName t ct of
-              Nothing -> throwE $ "field " ++ sn ++ " of class " ++ cn ++ " has invalid type " ++ t ++ "!"
-              Just _ -> classTable %= replaceClassInTable cid (ClassEntry cn ucc (FieldEntry sn (OBJ t) (length ft) : ft) mt)
 
 instance ContextGeneratable ClassID MethodDeclaration where
-  contextGenerator cid (Method (ProcedureHeader n pl mrp ps) c) = do
-    {- Insert new entry / Override existing into method table of corresponding class -}
-    -- Check for duplicate parameter names
-    when (hasNameCollisions pl) $ throwE $ "parameter list of procedure " ++ n ++ " has duplicates"
-    -- There will be one jump instruction before the actual method code starts
+  {- Instruction layout for MethodDeclaration:
+        Jump END
+        <code for subprocedure 1>
+        ...
+        <code for subprocedure n>
+        <code for stack memory allocation>
+        <code for initialization of return parameter>
+        <method instruction machine code>
+        <return instructions>
+   END:
+  -}
+  contextGenerator classID (Method (ProcedureHeader name parameters mReturnParameter subprocedures) code) = do
     prefixLength += 1
-    methodCodeStart <- use prefixLength
-    let newMethodEntry = ProcedureEntry (Signature n (map symbolDeclToType pl) (symbolDeclToType <$> mrp)) methodCodeStart
-    updateClassTableWithNewMethod cid newMethodEntry
-    {- Generate sub-procedures -}
-    -- Save the old procedure table for the reset later
-    oldpt <- use procedureTable
-    -- Generate the sub-procedure code
-    subProcedureInstructions <- traverse (contextGenerator NORMAL) ps
-    {- Insert object, parameters and return parameter into symbol table -}
-    ct <- use classTable
-    thisParam <- case lookup cid ct of
-      Nothing -> throwDiagnosticError "BUG encountered: method has no corresponding class!"
-      Just (ClassEntry cn _ _ _) -> return $ ObjectDeclaration $ Object cn "this"
-    let params =
-          thisParam : case mrp of
-            Nothing -> pl
-            Just rp -> if rp `elem` pl || rp == thisParam then pl else pl ++ [rp]
-    st <- use symbolTable
-    symbolTable .= addParamsToSymbols st params
-    stWithParams <- use symbolTable
-    {- Generate method instructions, including stack memory allocation -}
-    stackMemoryAllocationInstructions <- do
-      let localVariableMemoryRequirements = calculateInstructionStackMemoryRequirements c
-      -- if return parameter is not in parameter list, allocate a stack cell for it, too
-      let returnParameterMemoryRequirements =
-            case mrp of
-              Nothing -> 0
-              Just rp -> if rp `elem` pl then 0 else 1
-      let stackMemoryRequirements = localVariableMemoryRequirements + returnParameterMemoryRequirements
-      prefixLength += stackMemoryRequirements
-      return $ replicate stackMemoryRequirements (PushInt 0)
-    -- Generate memory init instructions for return parameter, if present, of type OBJ _ and not in param list or "this"
-    returnParameterInitInstructions <- do
-      case mrp of
-        Nothing -> return []
-        Just (IntDeclaration _) -> return [] -- Int return parameter doesn't need to be initialized b.c. it is already 0
-        Just rp@(ObjectDeclaration (Object _ p)) -> do
-          ct' <- use symbolTable
-          case lookupSymbol ct' p of
-            Nothing -> throwDiagnosticError "BUG encountered: return parameter missing from symbols!"
-            Just (SymbolEntry _ _ pos) ->
-              if rp `elem` pl || rp == thisParam
-                then return []
-                else do
-                  -- generate init instructions for return symbol
-                  prefixLength += 2
-                  return [PushInt (-1), StoreStack pos]
-    -- Generate instructions for the method itself
-    methodInstructions <- contextGenerator METHOD c
-    {- Create necessary instructions for return -}
-    returnInstructions <- case mrp of
-      Nothing -> return [Return False]
-      Just rp -> case lookupSymbol stWithParams (getSymbolDeclName rp) of
-        Nothing -> throwDiagnosticError "BUG encountered: return parameter missing from symbols!"
-        Just (SymbolEntry _ _ p) -> return [LoadStack p, Return True]
-    -- Update prefix
-    prefixLength += length returnInstructions
-    {- Cleanup state -}
-    -- Reset symbol table
+    {- side effects:
+       - add method to method table of class "classID"
+       - in case of inheritance, override inherited method if necessary -}
+    addMethodToClassTable classID name parameters mReturnParameter
+    {- save the old procedure table for the reset later -}
+    oldProcedureTable <- use procedureTable
+    {- side effects:
+       - add subprocedures to procedure table
+       - increase prefix length -}
+    subProcedureInstructions <- traverse (contextGenerator NORMAL) subprocedures
+    {- side effects:
+       - add parameters to symbol table
+       - this includes implicit parameter "this" and return parameter -}
+    thisParam <- addMethodParametersToSymbolTable classID parameters mReturnParameter
+    {- side effects:
+       - increase prefix length -}
+    stackMemoryAllocationInstructions <- generateStackMemoryAllocationInstructions parameters mReturnParameter code
+    {- side effects:
+       - increase prefix length -}
+    returnParameterInitInstructions <- generateMethodReturnParameterInitInstructions thisParam parameters mReturnParameter
+    {- side effects:
+       - increase prefix length -}
+    methodInstructions <- generator code
+    {- side effects:
+       - increase prefix length -}
+    returnInstructions <- generateReturnInstructions mReturnParameter
+    -- reset symbol table
     symbolTable .= []
-    -- Cleanup subprocedures from procedure table
-    procedureTable .= oldpt
-    {- Return generated procedure code -}
+    -- cleanup subprocedures from procedure table
+    procedureTable .= oldProcedureTable
+
     newPrefix <- use prefixLength
-    return $ [Jump newPrefix] ++ concat subProcedureInstructions ++ stackMemoryAllocationInstructions ++ returnParameterInitInstructions ++ methodInstructions ++ returnInstructions
-    where
-      updateClassTableWithNewMethod :: ClassID -> ProcedureEntry -> Generator ()
-      updateClassTableWithNewMethod cid' pe@(ProcedureEntry s _) = do
-        ct <- use classTable
-        case lookup cid' ct of
-          Nothing -> throwDiagnosticError "BUG encountered: method has no corresponding class!"
-          Just (ClassEntry cn ucid ft mt) -> case lookupOverridableMethod ct s mt of
-            -- If an overridable method doesn't exist yet, this method is new and can just be added with a new ID
-            Nothing -> classTable .= replaceClassInTable cid' (ClassEntry cn ucid ft ((length mt, pe) : mt)) ct
-            -- Otherwise, override the method from upper class with the same ID!
-            Just (mid, ProcedureEntry _ _) -> classTable .= replaceClassInTable cid' (ClassEntry cn ucid ft (replaceMethodInTable mid pe mt)) ct
-
-      replaceMethodInTable :: MethodID -> ProcedureEntry -> MethodTable -> MethodTable
-      replaceMethodInTable mid pe mt = (mid, pe) : filter ((/=) mid . fst) mt
-
-      lookupOverridableMethod :: ClassTable -> Signature -> MethodTable -> Maybe (MethodID, ProcedureEntry)
-      lookupOverridableMethod _ _ [] = Nothing
-      lookupOverridableMethod ct s ((mid, p@(ProcedureEntry s' _)) : mt) =
-        if overridesSig ct s s'
-          then Just (mid, p)
-          else lookupOverridableMethod ct s mt
-        where
-          overridesSig ct' (Signature name ts rt) (Signature name' ts' rt') = name == name' && ts == ts' && overridesRet ct' rt rt'
-          overridesRet _ Nothing Nothing = True
-          overridesRet _ Nothing (Just _) = False
-          overridesRet _ (Just _) Nothing = False
-          overridesRet ct' (Just t) (Just t') = isSubtypeOf ct' t t'
+    return $
+      [Jump newPrefix]
+        ++ concat subProcedureInstructions
+        ++ stackMemoryAllocationInstructions
+        ++ returnParameterInitInstructions
+        ++ methodInstructions
+        ++ returnInstructions
 
 instance ContextGeneratable ProcedureKind ProcedureDeclaration where
-  contextGenerator kind (Procedure (ProcedureHeader n pl mrp ps) c) = do
-    {- Insert new entry into procedure table -}
-    -- Check for duplicate parameter names
-    when (hasNameCollisions pl) $ throwE $ "parameter list of procedure " ++ n ++ " has duplicates"
-    pt <- use procedureTable
-    oldPrefix <- use prefixLength
-    -- Address of new procedure must be the old prefix + 1, because of the jump instruction at the beginning that must be skipped
-    let newProcedureEntry = ProcedureEntry (Signature n (map symbolDeclToType pl) (symbolDeclToType <$> mrp)) (oldPrefix + 1)
-    -- Update state with new procedure entry
-    procedureTable .= newProcedureEntry : pt
-    {- Generate sub-procedures -}
-    -- Increase prefix by 1 - we know there will be 1 new jump instruction for the upper procedure before the subprocedures
+  {- Instruction layout for ProcedureDeclaration:
+        Jump END
+        <code for subprocedure 1>
+        ...
+        <code for subprocedure n>
+        <code for stack memory allocation>
+        <code for initialization of return parameter>
+        <IF INIT-procedure: code for heap memory allocation>
+        <procedure instruction machine code>
+        <return instructions>
+   END:
+  -}
+  contextGenerator kind (Procedure (ProcedureHeader name parameters mReturnParameter subprocedures) code) = do
     prefixLength += 1
-    -- Generate code for sub procedures
-    subProcedureInstructions <- traverse (contextGenerator NORMAL) ps
-    {- Insert parameters and return parameter into symbol table -}
-    let params = case mrp of
-          Nothing -> pl
-          Just rp -> if rp `elem` pl then pl else pl ++ [rp]
-    st <- use symbolTable
-    symbolTable .= addParamsToSymbols st params
-    stWithParams <- use symbolTable
-    {- Generate procedure code, including stack memory allocation and, in case of initializers, heap memory allocation-}
-    stackMemoryAllocationInstructions <- do
-      let localVariableMemoryRequirements = calculateInstructionStackMemoryRequirements c
-      -- if return parameter is not in parameter list, allocate a stack cell for it, too
-      let returnParameterMemoryRequirements =
-            case mrp of
-              Nothing -> 0
-              Just rp -> if rp `elem` pl then 0 else 1
-      let stackMemoryRequirements = localVariableMemoryRequirements + returnParameterMemoryRequirements
-      prefixLength += stackMemoryRequirements
-      return $ replicate stackMemoryRequirements (PushInt 0)
-    -- Generate memory init instructions for return parameter, if present, of type OBJ _ and not in param list
-    returnParameterInitInstructions <- do
-      case mrp of
-        Nothing -> return []
-        Just (IntDeclaration _) -> return [] -- Int return parameter doesn't need to be initialized b.c. it is already 0
-        Just rp@(ObjectDeclaration (Object _ p)) -> do
-          ct' <- use symbolTable
-          case lookupSymbol ct' p of
-            Nothing -> throwDiagnosticError "BUG encountered: return parameter missing from symbols!"
-            Just (SymbolEntry _ _ pos) ->
-              if rp `elem` pl
-                then return []
-                else do
-                  -- generate init instructions for return symbol
-                  prefixLength += 2
-                  return [PushInt (-1), StoreStack pos]
-    -- IF INIT procedure: generate memory allocation instructions and update prefix accordingly
-    heapMemoryAllocationInstructions <- case kind of
-      INIT -> do
-        prefixLength += 2
-        case mrp of
-          Nothing -> throwDiagnosticError "BUG encountered: initializer without return value!"
-          Just rp -> case lookupSymbol stWithParams (getSymbolDeclName rp) of
-            Nothing -> throwDiagnosticError "BUG encountered: return parameter missing from symbols!"
-            Just (SymbolEntry _ t p) -> case t of
-              INT -> throwDiagnosticError "BUG encountered: initializer with INT return value!"
-              OBJ s -> do
-                ct <- use classTable
-                case lookupClassByName s ct of
-                  Nothing -> throwDiagnosticError "BUG encountered: initializer with invalid return type!"
-                  -- generate heap allocation instructions, along with instructions to correctly initialize all fields
-                  Just (cid, ClassEntry _ _ ft _) -> do
-                    let fieldInitCmds = concatMap inits ft
-                    prefixLength += length fieldInitCmds
-                    return $ [AllocateHeap (length ft) cid, StoreStack p] ++ fieldInitCmds
-                    where
-                      inits (FieldEntry _ (OBJ _) heapFrameIndex) = [LoadStack p, PushInt (-1), StoreHeap heapFrameIndex]
-                      inits (FieldEntry _ INT heapFrameIndex) = [LoadStack p, PushInt 0, StoreHeap heapFrameIndex]
-      _ -> return []
-    -- generate the instructions
-    procedureInstructions <- contextGenerator PROCEDURE c
-    {- Create necesary instructions for return -}
-    returnInstructions <- case mrp of
-      Nothing -> return [Return False]
-      Just rp -> case lookupSymbol stWithParams (getSymbolDeclName rp) of
-        Nothing -> throwDiagnosticError "BUG encountered: return parameter missing from symbols!"
-        Just (SymbolEntry _ _ p) -> return [LoadStack p, Return True]
-    -- Update prefix
-    prefixLength += length returnInstructions
-    {- Cleanup state -}
-    -- Reset symbol table
+    {- side effects:
+       - add procedure to procedure table -}
+    addToProcedureTable name parameters mReturnParameter
+    {- save the old procedure table for the reset later -}
+    oldProcedureTable <- use procedureTable
+    {- side effects:
+       - add subprocedures to procedure table
+       - increase prefix length -}
+    subProcedureInstructions <- traverse (contextGenerator NORMAL) subprocedures
+    {- side effects:
+       - add parameters to symbol table
+       - this includes return parameter -}
+    addProcedureParametersToSymbolTable parameters mReturnParameter
+    {- side effects:
+       - increase prefix length -}
+    stackMemoryAllocationInstructions <- generateStackMemoryAllocationInstructions parameters mReturnParameter code
+    {- side effects:
+       - increase prefix length -}
+    returnParameterInitInstructions <- generateProcedureReturnParameterInitInstructions parameters mReturnParameter
+    {- side effects:
+       - increase prefix length -}
+    heapMemoryAllocationInstructions <- generateHeapMemoryAllocationInstructions kind mReturnParameter
+    {- side effects:
+       - increase prefix length -}
+    procedureInstructions <- generator code
+    {- side effects:
+       - increase prefix length -}
+    returnInstructions <- generateReturnInstructions mReturnParameter
+    -- reset symbol table
     symbolTable .= []
-    -- Reset procedure table to only contain the topmost procedure, not the subprocedures
-    procedureTable .= newProcedureEntry : pt
-    {- Return generated procedure code -}
+    -- cleanup subprocedures from procedure table
+    procedureTable .= oldProcedureTable
+
     newPrefix <- use prefixLength
-    return $ [Jump newPrefix] ++ concat subProcedureInstructions ++ stackMemoryAllocationInstructions ++ returnParameterInitInstructions ++ heapMemoryAllocationInstructions ++ procedureInstructions ++ returnInstructions
+    return $
+      [Jump newPrefix]
+        ++ concat subProcedureInstructions
+        ++ stackMemoryAllocationInstructions
+        ++ returnParameterInitInstructions
+        ++ heapMemoryAllocationInstructions
+        ++ procedureInstructions
+        ++ returnInstructions
 
-instance Generatable Call where
-  generator (SymbolReference (NameReference n)) = do
-    -- lookup name
-    st <- use symbolTable
-    pos <- case lookupSymbol st n of
-      Nothing -> throwE $ "undefined symbol " ++ n
-      Just (SymbolEntry _ _ p) -> return p
-    -- the resulting instruction is just a load on the symbol's position
+instance Generatable SyntaxTree.Instruction where
+  {- Basic instructions -}
+  {- Instruction layout for variable assignment:
+      <code for expression>
+      LoadStack ...
+  -}
+  generator (Assignment (NameReference name) expr) = do
+    (symPos, symType) <- lookupSymbolPosAndTypeByName name
+    exprType <- typify expr
+    checkTypeCompatibility exprType symType
+    {- side effect:
+       - increase prefix length
+    -}
+    exprInstructions <- generator expr
     prefixLength += 1
-    return [LoadStack pos]
-  generator (SymbolReference (FieldReference o f)) = do
-    -- lookup object
-    st <- use symbolTable
-    (objType, objPos) <- case lookupSymbol st o of
-      Nothing -> throwE $ "undefined symbol " ++ o
-      Just (SymbolEntry _ INT _) -> throwE "trying to access field of a non-object"
-      Just (SymbolEntry _ (OBJ t) p) -> return (t, p)
-    ct <- use classTable
-    -- lookup field
-    fieldPos <- case lookupClassByName objType ct of
-      Nothing -> throwDiagnosticError $ "BUG encountered: invalid class for object " ++ o
-      Just (_, ClassEntry _ _ ft _) -> case lookupFieldByName ft f of
-        Nothing -> throwE $ "invalid field " ++ f ++ " reference for object " ++ o
-        Just (FieldEntry _ _ p) -> return p
-    -- the resulting instructions are a stack load of the symbols position to push the object's address, then a heap load of the referenced field
+    return $
+      exprInstructions
+        ++ [StoreStack symPos]
+  {- Instruction layout for variable assignment:
+      LoadStack ...
+      <code for expression>
+      StoreStack ...
+  -}
+  generator (Assignment (FieldReference obj field) expr) = do
+    (objPos, objType) <- lookupSymbolPosAndTypeByName obj
+    (fieldPos, fieldType) <- lookupFieldPosAndTypeByTypeAndFieldName objType field
+    exprType <- typify expr
+    checkTypeCompatibility exprType fieldType
+    prefixLength += 1
+    {- side effect:
+       - increase prefix length
+    -}
+    exprInstructions <- generator expr
+    prefixLength += 1
+    return $
+      [LoadStack objPos]
+        ++ exprInstructions
+        ++ [StoreHeap fieldPos]
+  generator (SymbolDeclarationInstruction (IntDeclaration (Int n))) = do
+    {- side effect:
+       - add new symbol to symbol table
+    -}
+    pos <- addSymbolToTable n INT
     prefixLength += 2
-    return [LoadStack objPos, LoadHeap fieldPos]
-  generator (Call (NameReference n) apl) = do
-    -- lookup procedure
-    paramTypes <- traverse typify apl
-    ct <- use classTable
-    pt <- use procedureTable
-    procAddress <- case sequenceA paramTypes of
-      Nothing -> throwE "type error: empty type in parameter hole!"
-      Just ts -> case lookupClosestMatchingProc ct pt n ts of
-        Left e -> throwE e
-        Right (ProcedureEntry _ a) -> return a
-    -- generate parameter loading instructions and procedure call
-    paramInstructions <- traverse generator apl
-    prefixLength += 1 -- we only generate 1 additional instruction - the procedure call
-    -- the result is all the instructions to generate the parameter expressions in order followed by the procedure call
-    return $ concat paramInstructions ++ [CallProcedure procAddress (length apl)]
-  generator (Call (FieldReference o m) apl) = do
-    -- lookup method from method table
-    paramTypes <- traverse typify apl
-    ct <- use classTable
-    st <- use symbolTable
-    methodID <- case sequenceA paramTypes of
-      Nothing -> throwE "type error: empty type in parameter hole!"
-      Just ts -> case lookupClosestMatchingMethod ct st o m ts of
-        Left e -> throwE e
-        Right (mid, ProcedureEntry _ _) -> return mid
-    -- generate parameter loading instructions and method call
-    -- first, lookup the object position
-    objPos <- case lookupSymbol st o of
-      Nothing -> throwE $ "call on invalid object symbol " ++ o
-      Just (SymbolEntry _ _ p) -> return p
-    let objectLoadingInstruction = [LoadStack objPos]
-    prefixLength += 1
-    -- then generate the instructions for all the actual parameters
-    paramInstructions <- traverse generator apl
-    prefixLength += 1
-    return $ objectLoadingInstruction ++ concat paramInstructions ++ [CallMethod methodID (length apl)]
-
-instance Typeable Call where
-  typifier (SymbolReference (NameReference n)) = do
-    st <- view symbolTableT
-    case lookupSymbol st n of
-      Nothing -> throwE $ "undefined variable in expression: " ++ n
-      -- an symbol's type is just the type declared in the symbol table
-      Just (SymbolEntry _ t _) -> return $ Just t
-  typifier (SymbolReference (FieldReference o f)) = do
-    -- lookup object
-    st <- view symbolTableT
-    (objType, _) <- case lookupSymbol st o of
-      Nothing -> throwE $ "undefined symbol " ++ o
-      Just (SymbolEntry _ INT _) -> throwE "trying to access field of a non-object"
-      Just (SymbolEntry _ (OBJ t) p) -> return (t, p)
-    ct <- view classTableT
-    -- lookup field
-    case lookupClassByName objType ct of
-      Nothing -> throwE $ "BUG encountered: invalid class for object " ++ o
-      Just (_, ClassEntry _ _ ft _) -> case lookupFieldByName ft f of
-        Nothing -> throwE $ "invalid field " ++ f ++ " reference for object " ++ o
-        -- a field reference's type is determined by the field type in the class declaration
-        Just (FieldEntry _ t _) -> return $ Just t
-  typifier (Call (NameReference n) apl) = do
-    paramTypes <- traverse typifier apl
-    pt <- view procedureTableT
-    ct <- view classTableT
-    case sequenceA paramTypes of
-      -- IF one of the types is Nothing, there is a hole!
-      Nothing -> throwE "type error: empty type in parameter hole!"
-      Just ts -> case lookupClosestMatchingProc ct pt n ts of
-        Left e -> throwE e
-        -- the type of the procedure call is just the type of the closest matching procedure
-        Right (ProcedureEntry (Signature _ _ rt) _) -> return rt
-  typifier (Call (FieldReference o m) apl) = do
-    paramTypes <- traverse typifier apl
-    ct <- view classTableT
-    st <- view symbolTableT
-    case sequenceA paramTypes of
-      Nothing -> throwE "type error: empty type in parameter hole!"
-      Just ts -> case lookupClosestMatchingMethod ct st o m ts of
-        Left e -> throwE e
-        -- again, the lookup function does the magic here, we just return its result
-        Right (_, ProcedureEntry (Signature _ _ rt) _) -> return rt
-
--- Every instruction can be in procedure-, method-, main-program- context or inside of an instruction block
-data InstructionContext = PROCEDURE | METHOD | MAIN | INNER
-
-instance ContextGeneratable InstructionContext SyntaxTree.Instruction where
-  contextGenerator ctxt (Assignment (NameReference n) e) = do
-    ct <- use classTable
-    st <- use symbolTable
-    (symType, symPos) <- case lookupSymbol st n of
-      Nothing -> throwE $ "assignment to undefined variable " ++ n
-      Just (SymbolEntry _ t p) -> return (t, p)
-    mt <- typify e
-    case mt of
-      Nothing -> throwE $ "variable " ++ n ++ " was assigned an expression with empty type"
-      Just ty ->
-        if isSubtypeOf ct ty symType
-          then do
-            -- Type is correct - we can generate the instructions
-            eInstructions <- generator e
-            prefixLength += 1
-            updateSymbolTableDependingOnInstructionContext ctxt st
-            return $ eInstructions ++ [StoreStack symPos]
-          else throwDiagnosticError $ "variable " ++ n ++ " was assigned an expression with incompatible type"
-  contextGenerator _ (Assignment (FieldReference o f) e) = do
-    -- lookup object
-    st <- use symbolTable
-    (objType, objPos) <- case lookupSymbol st o of
-      Nothing -> throwE $ "undefined symbol " ++ o
-      Just (SymbolEntry _ INT _) -> throwE "trying to access field of a non-object"
-      Just (SymbolEntry _ (OBJ t) p) -> return (t, p)
-    ct <- use classTable
-    -- lookup field
-    (fieldType, fieldPos) <- case lookupClassByName objType ct of
-      Nothing -> throwDiagnosticError $ "BUG encountered: invalid class for object " ++ o
-      Just (_, ClassEntry _ _ ft _) -> case lookupFieldByName ft f of
-        Nothing -> throwE $ "invalid field " ++ f ++ " reference for object " ++ o
-        Just (FieldEntry _ t p) -> return (t, p)
-    -- check types
-    exprType <- typify e
-    case exprType of
-      Nothing -> throwE "type error: trying to assign empty return value"
-      Just ty ->
-        if isSubtypeOf ct ty fieldType
-          then return ()
-          else throwE $ "type error: cannot assign to field, as type " ++ show ty ++ " of expression is not a subtype of field " ++ f ++ " with type " ++ show fieldType ++ " of object " ++ o
-    -- generate instructions
-    let objAddrLoadInstruction = [LoadStack objPos]
-    prefixLength += 1
-    expressionInstructions <- generator e
-    let storeInstruction = [StoreHeap fieldPos]
-    prefixLength += 1
-    return $ objAddrLoadInstruction ++ expressionInstructions ++ storeInstruction
-  contextGenerator ctxt (SymbolDeclarationInstruction (IntDeclaration (Int n))) = do
-    -- Assemble new symbol entry and add it
-    st <- use symbolTable
-    symbolTable .= addSymbol st n INT
-    st' <- use symbolTable
-    -- lookup position of new symbol
-    pos <- case lookupSymbol st' n of
-      Nothing -> throwDiagnosticError "BUG encountered: impossibly, the symbol we just added vanished"
-      Just (SymbolEntry _ _ p) -> return p
-    -- return instructions and update prefix as well symbol table
-    prefixLength += 2
-    -- possible optimization: if the context isn't INNER, the instructions can be omitted altogether
-    updateSymbolTableDependingOnInstructionContext ctxt st
     return [PushInt 0, StoreStack pos]
-  contextGenerator ctxt (SymbolDeclarationInstruction (ObjectDeclaration (Object t n))) = do
-    -- Check if class is valid
-    ct <- use classTable
-    case lookupClassByName t ct of
-      Nothing -> throwE $ "invalid class " ++ t ++ " for object " ++ n
-      Just _ -> return ()
-    -- Assemble new symbol entry and add it
-    st <- use symbolTable
-    symbolTable .= addSymbol st n (OBJ t)
-    st' <- use symbolTable
-    -- look up position of new symbol
-    pos <- case lookupSymbol st' n of
-      Nothing -> throwDiagnosticError "BUG encountered: impossibly, the symbol we just added vanished"
-      Just (SymbolEntry _ _ p) -> return p
-    -- return instructions and update prefix as well as symbol table
+  generator (SymbolDeclarationInstruction (ObjectDeclaration (Object cname name))) = do
+    checkClassValidity cname
+    {- side effect:
+       - add new symbol to symbol table
+    -}
+    pos <- addSymbolToTable name (OBJ cname)
     prefixLength += 2
-    -- possible optimization: of the context isn't INNER, the instructions can be omitted altogether
-    updateSymbolTableDependingOnInstructionContext ctxt st
-    -- An object declaration doesn't allocate memory, the address will be invalid until the object is initialized
     return [PushInt (-1), StoreStack pos]
-  contextGenerator _ (CallInstruction call) = do
+  generator (CallInstruction call) = do
     t <- typify call
+    {- side effect:
+       - increase prefix length
+    -}
     case t of
       Nothing -> generator call
       Just _ -> throwE "type error: we can only fit empty return values here"
-  contextGenerator _ (SyntaxTree.Read n) = do
-    st <- use symbolTable
-    pos <- case lookupSymbol st n of
-      Nothing -> throwE $ "undefined symbol " ++ n
-      Just (SymbolEntry _ (OBJ _) _) -> throwE $ "type error: " ++ n ++ " is an object, can't read an integer into it"
-      Just (SymbolEntry _ INT p) -> return p
+  generator (SyntaxTree.Read name) = do
+    (pos, t) <- lookupSymbolPosAndTypeByName name
+    checkTypeCompatibility (Just INT) t
     prefixLength += 2
     return [MachineInstruction.Read, StoreStack pos]
-  contextGenerator _ (Block cs) = do
-    -- save old symbol table for the reset after generating the instructions - this implements scoping
-    st <- use symbolTable
-    cmds <- traverse (contextGenerator INNER) cs
-    symbolTable .= st
-    return $ concat cmds
-  contextGenerator _ (IfThen cond cmd) = do
-    st <- use symbolTable
-    condInstructions <- generator cond
+  generator (SyntaxTree.PrintI expr) = do
+    t <- typify expr
+    checkTypeCompatibility t INT
+    {- side effect:
+       - increase prefix length
+    -}
+    exprInstructions <- generator expr
     prefixLength += 1
-    bodyInstructions <- contextGenerator INNER cmd
-    symbolTable .= st
-    p <- use prefixLength
-    return $ condInstructions ++ [JumpIfFalse p] ++ bodyInstructions
-  contextGenerator _ (While cond cmd) = do
-    st <- use symbolTable
-    oldPrefix <- use prefixLength
-    condInstructions <- generator cond
-    prefixLength += 1
-    bodyInstructions <- contextGenerator INNER cmd
-    prefixLength += 1
-    symbolTable .= st
-    newPrefix <- use prefixLength
-    return $ condInstructions ++ [JumpIfFalse newPrefix] ++ bodyInstructions ++ [Jump oldPrefix]
-  contextGenerator _ (SyntaxTree.PrintI e) = do
-    t <- typify e
-    case t of
-      Nothing -> throwE "type error: we can only fit integer values here"
-      Just (OBJ _) -> throwE "type error: we can only fit integer values here"
-      Just INT -> do
-        eCmds <- generator e
-        prefixLength += 1
-        return $ eCmds ++ [PrintInt]
-  contextGenerator _ (PrintS msg) = do
+    return $ exprInstructions ++ [PrintInt]
+  generator (PrintS msg) = do
     prefixLength += 1
     return [PrintStr msg]
-  contextGenerator _ (PrintLnS msg) = do
+  generator (PrintLnS msg) = do
     prefixLength += 1
     return [PrintStrLn msg]
-  contextGenerator _ Error = do
+  generator Error = do
     prefixLength += 1
     return [Halt]
+  {- Composite instructions -}
+  generator (Block oInstructions) = do
+    -- reset symbol table afterwards to implement scoping
+    oldSymbolTable <- use symbolTable
+    {- side effects:
+       - increase prefix length
+       - add new symbols to symbol table
+    -}
+    mInstructions <- traverse generator oInstructions
+    symbolTable .= oldSymbolTable
+    return $ concat mInstructions
+  {- Machine instruction layout for if-then-conditionals:
+        <code for condition>
+        JumpIfFalse END
+        <code for body>
+    END:
+  -}
+  generator (IfThen cond body) = do
+    {- side effect:
+       - increase prefix length
+    -}
+    condInstructions <- generator cond
+    prefixLength += 1
+    oldSymbolTable <- use symbolTable
+    {- side effects:
+       - increase prefix length
+       - add new symbols to symbol table
+    -}
+    bodyInstructions <- generator body
+    symbolTable .= oldSymbolTable
+    p <- use prefixLength
+    return $
+      condInstructions
+        ++ [JumpIfFalse p]
+        ++ bodyInstructions
+  generator (While cond body) = do
+    oldSymbolTable <- use symbolTable
+    start <- use prefixLength
+    {- side effect:
+       - increase prefix length
+    -}
+    condInstructions <- generator cond
+    prefixLength += 1
+    {- side effects:
+       - increase prefix length
+       - add new symbols to symbol table
+    -}
+    bodyInstructions <- generator body
+    prefixLength += 1
+    symbolTable .= oldSymbolTable
+    end <- use prefixLength
+    return $
+      condInstructions
+        ++ [JumpIfFalse end]
+        ++ bodyInstructions
+        ++ [Jump start]
 
-{- This action generator is for correctly setting the symbol table after an instruction is generated.
- - The correct behavior depends on the context:
- - Method-, Procedure- and Main-Program-Context: The symbol table should be reset
- - Inner instruction as part of an instruction block: The symbol table should NOT be reset
- - Following instructions would need access to the new symbols that preceding instructions in the same block generate, for example:
- -  WHILE 1 = 1 { VAR x
- -                x := 0 }
- - A block on the other hand will always reset the symbol table, to respect scoping rules
- - For example, the following should be illegal:
- - PROCEDURE foo(VAR x) { { VAR Y } Y := 0 }
- -}
-updateSymbolTableDependingOnInstructionContext :: InstructionContext -> SymbolTable -> Generator ()
-updateSymbolTableDependingOnInstructionContext INNER _ = return ()
-updateSymbolTableDependingOnInstructionContext _ st = symbolTable .= st
+instance Generatable Call where
+  generator (SymbolReference (NameReference name)) = do
+    pos <- lookupSymbolPosByName name
+    prefixLength += 1
+    return [LoadStack pos]
+  generator (SymbolReference (FieldReference obj field)) = do
+    (objPos, t) <- lookupSymbolPosAndTypeByName obj
+    fieldPos <- lookupFieldPosByTypeAndFieldName t field
+    prefixLength += 2
+    return [LoadStack objPos, LoadHeap fieldPos]
+  {- Instruction layout for procedure calls with address a and n parameters:
+      <code for expression 1>
+      ...
+      <code for expression n>
+      CallProcedure a n
+  -}
+  generator (Call (NameReference name) actualParameterList) = do
+    paramTypes <- traverse typify actualParameterList
+    procAddress <- calculateMatchingSetMinimumAddressForProcedureInvocation name paramTypes
+    {- side effect:
+       - increase prefix length
+    -}
+    paramInstructions <- traverse generator actualParameterList
+    prefixLength += 1
+    return $
+      concat paramInstructions
+        ++ [CallProcedure procAddress (length actualParameterList)]
+  {- Instruction layout for method calls with method ID id and n parameters:
+      <code for expression 1>
+      ...
+      <code for expression n>
+      CallMethod i n
+  -}
+  generator (Call (FieldReference objName methodName) actualParameterList) = do
+    paramTypes <- traverse typify actualParameterList
+    methodID <- calculateMatchingSetMinimumIDForMethodInvocation objName methodName paramTypes
+    objPos <- lookupSymbolPosByName objName
+    prefixLength += 1
+    {- side efect:
+       - increase prefix length
+    -}
+    paramInstructions <- traverse generator actualParameterList
+    prefixLength += 1
+    return $
+      [LoadStack objPos]
+        ++ concat paramInstructions
+        ++ [CallMethod methodID (length actualParameterList)]
+
+instance Typeable Call where
+  typifier (SymbolReference (NameReference name)) = lookupSymbolTypeByNameT name
+  typifier (SymbolReference (FieldReference obj field)) = do
+    objType <- lookupSymbolTypeByNameT obj
+    lookupFieldTypeByTypeAndFieldName objType field
+  typifier (Call (NameReference name) actualParameterList) = do
+    paramTypes <- traverse typifier actualParameterList
+    calculateMatchingSetMinimumTypeForProcedureInvocationT name paramTypes
+  typifier (Call (FieldReference obj method) actualParameterList) = do
+    paramTypes <- traverse typifier actualParameterList
+    calculateMatchingSetMinimumTypeForMethodInvocationT obj method paramTypes
 
 instance Generatable Condition where
-  generator (Comparison e r e') = do
+  generator (Comparison left relation right) = do
     -- check types
-    t <- typify e
-    t' <- typify e'
-    case t of
-      Nothing -> throwE "type error: conditions can only be evaluated on integers"
-      Just ty -> when (ty /= INT || t /= t') $ throwE "type error: conditions can only be evaluated on integers"
-    eInstructions <- generator e
-    e'Instructions <- generator e'
-    let newCmds = eInstructions ++ e'Instructions ++ [CombineBinary $ conv r]
+    tLeft <- typify left
+    tRight <- typify right
+    checkTypeCompatibility tLeft INT
+    checkTypeCompatibility tRight INT
+    {- side effect:
+       - increase prefix length
+    -}
+    leftInstructions <- generator left
+    {- side effect:
+       - increase prefix length
+    -}
+    rightInstructions <- generator right
     prefixLength += 1
-    return newCmds
+    return $
+      leftInstructions
+        ++ rightInstructions
+        ++ [CombineBinary $ conv relation]
     where
       conv SyntaxTree.Equals = MachineInstruction.Equals
       conv SyntaxTree.Smaller = MachineInstruction.Smaller
       conv SyntaxTree.Greater = MachineInstruction.Greater
-  generator (Negation c) = do
-    cmds <- generator c
-    let newCmds = cmds ++ [CombineUnary Not]
+  generator (Negation cond) = do
+    {- side effect:
+       - increase prefix length
+    -}
+    condInstructions <- generator cond
     prefixLength += 1
-    return newCmds
+    return $ condInstructions ++ [CombineUnary Not]
 
 -- this generator expects the expression to be well-typed which needs to be ensured before calling
 instance Generatable Expression where
-  generator (Expression ((s, t) :| sts)) = do
+  {- Machine code layout for Expression:
+      <code for first term>
+      <code for term 2>
+      CombinaBinary <sign 2>
+      ...
+      <code for term n>
+      CombineBinary <sign n>
+  -}
+  generator (Expression ((sign, term) :| signTerms)) = do
     -- If there is a plus, we just generate the factor (works also if s has type OBJ _)
     -- If there is a minus, we generate PushInt 0 before and CombineBinaryMinus after the factor, calculating its negated value
-    firstFactorInstructions <- case s of
-      SyntaxTree.Plus -> generator t
+    firstTermInstructions <- case sign of
+      SyntaxTree.Plus -> generator term
       SyntaxTree.Minus -> do
         prefixLength += 1
-        factorInstructions <- generator t
+        {- side effect:
+           - increase prefix length
+        -}
+        termInstructions <- generator term
         prefixLength += 1
-        return $ [PushInt 0] ++ factorInstructions ++ [CombineBinary MachineInstruction.Minus]
-    tsInstructions <- traverse stGenerator sts
-    return $ firstFactorInstructions ++ concat tsInstructions
+        return $
+          [PushInt 0]
+            ++ termInstructions
+            ++ [CombineBinary MachineInstruction.Minus]
+    {- side effect:
+       - increase prefix length
+    -}
+    signTermsInstructions <- traverse signTermGenerator signTerms
+    return $ firstTermInstructions ++ concat signTermsInstructions
     where
-      stGenerator (s', t') = do
-        tInstructions <- generator t'
+      signTermGenerator (sign', term') = do
+        termInstructions <- generator term'
         prefixLength += 1
-        let signInstruction = [CombineBinary $ conv s']
-        return $ tInstructions ++ signInstruction
+        return $ termInstructions ++ [CombineBinary $ conv sign']
       conv SyntaxTree.Plus = MachineInstruction.Plus
       conv SyntaxTree.Minus = MachineInstruction.Minus
 
 instance Typeable Expression where
-  typifier (Expression ((_, t) :| ts)) = do
+  typifier (Expression ((s, t) :| ts)) = do
     ttype <- typifier t
-    if null ts
+    if null ts && s == SyntaxTree.Plus
       then return ttype
       else do
         -- we just typify all the terms - if there are multiple terms and one is not an integer, the type is invalid
@@ -968,16 +1139,32 @@ instance Typeable Expression where
           else throwE "invalid type: non-integer value in algebraic term!"
 
 instance Generatable Term where
-  generator (Term f ofs) = do
-    fInstructions <- generator f
-    ofsInstructions <- traverse ofsGenerator ofs
-    return $ fInstructions ++ concat ofsInstructions
+  {- Machine code layout for Term:
+      <code for first factor>
+      <code for factor 2>
+      CombinaBinary <operator 2>
+      ...
+      <code for factor n>
+      CombineBinary <operator n>
+  -}
+  generator (Term factor operatorFactors) = do
+    {- side effect:
+       - increase prefix length
+    -}
+    firstFactorInstructions <- generator factor
+    {- side effect:
+       - increase prefix length
+    -}
+    otherFactorsInstructions <- traverse otherFactorsGenerator operatorFactors
+    return $ firstFactorInstructions ++ concat otherFactorsInstructions
     where
-      ofsGenerator (o, f') = do
-        fInstructions <- generator f'
+      otherFactorsGenerator (op, factor') = do
+        {- side effect:
+           - increase prefix length
+        -}
+        factor'Instructions <- generator factor'
         prefixLength += 1
-        let oInstruction = [CombineBinary $ conv o]
-        return $ fInstructions ++ oInstruction
+        return $ factor'Instructions ++ [CombineBinary $ conv op]
       conv SyntaxTree.Times = MachineInstruction.Times
       conv SyntaxTree.Divide = MachineInstruction.Divide
 
@@ -994,12 +1181,13 @@ instance Typeable Term where
           else throwE "invalid type: non-integer value in algebraic term!"
 
 instance Generatable Factor where
-  generator (CallFactor c) = generator c
-  generator (ClassInstantiation cn apl) = generator (Call (NameReference $ "INIT_" ++ cn) apl)
+  generator (CallFactor call) = generator call
+  -- for class name 'cname', generateInitializer generates the initializer as a procedure with name "INIT_cname"
+  generator (ClassInstantiation cname actualParameterList) = generator (Call (NameReference $ "INIT_" ++ cname) actualParameterList)
   generator (Integer n) = do
     prefixLength += 1
     return [PushInt n]
-  generator (CompositeFactor e) = generator e
+  generator (CompositeFactor expr) = generator expr
 
 -- these don't introduce much new logic, just syntax tree decomposition for the most part
 instance Typeable Factor where
