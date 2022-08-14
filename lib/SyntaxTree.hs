@@ -57,8 +57,8 @@ data ProcedureHeader
   deriving (Eq, Show)
 
 data Instruction
-  {- Basic instructions -}
-  = Assignment SymbolReference Expression
+  = {- Basic instructions -}
+    Assignment SymbolReference Expression
   | SymbolDeclarationInstruction SymbolDeclaration
   | CallInstruction Call
   | Read SymbolName
@@ -66,8 +66,8 @@ data Instruction
   | PrintS String
   | PrintLnS String
   | Error
-  {- Composite instructions -}
-  | Block (NonEmpty Instruction)
+  | {- Composite instructions -}
+    Block (NonEmpty Instruction)
   | IfThen Condition Instruction
   | While Condition Instruction
   deriving (Eq, Show)

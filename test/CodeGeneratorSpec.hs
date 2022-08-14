@@ -5,11 +5,11 @@ import CodeGenerator
     calculateStackMemoryRequirement,
   )
 import Data.Either (fromRight, isLeft, isRight)
+import MachineInstruction
 import Parser (Parseable (parse))
 import SyntaxTree (Instruction (Read), Program (..))
 import Test.Hspec (Spec, describe, it, shouldBe, shouldSatisfy)
 import Tokenizer (tokenize)
-import MachineInstruction
 
 unsafeParseInstruction :: String -> SyntaxTree.Instruction
 unsafeParseInstruction = fromRight (SyntaxTree.Read "") . parse . fromRight [] . tokenize
@@ -151,12 +151,12 @@ spec = do
   describe "example programs for machine compile to the correct instructions" $ do
     it "program fac0 compiles to the correct machine code" $ do
       prog <- readFile "resources/example-programs/fac0.olang"
-      unsafeGenerate prog `shouldBe` Right [PushInt 0,PushInt 0,PrintStr "Please enter a natural number n: ",PushInt 0,StoreStack 0,MachineInstruction.Read,StoreStack 0,PushInt 0,StoreStack 1,PushInt 1,StoreStack 1,LoadStack 0,PushInt 0,CombineBinary Smaller,JumpIfFalse 19,LoadStack 0,PrintInt,PrintStrLn " is not a natural number!",Halt,LoadStack 0,PushInt 0,CombineBinary Greater,JumpIfFalse 32,LoadStack 1,LoadStack 0,CombineBinary Times,StoreStack 1,LoadStack 0,PushInt 1,CombineBinary Minus,StoreStack 0,Jump 19,PrintStr "n! = ",LoadStack 1,PrintInt,Halt]
+      unsafeGenerate prog `shouldBe` Right [PushInt 0, PushInt 0, PrintStr "Please enter a natural number n: ", PushInt 0, StoreStack 0, MachineInstruction.Read, StoreStack 0, PushInt 0, StoreStack 1, PushInt 1, StoreStack 1, LoadStack 0, PushInt 0, CombineBinary Smaller, JumpIfFalse 19, LoadStack 0, PrintInt, PrintStrLn " is not a natural number!", Halt, LoadStack 0, PushInt 0, CombineBinary Greater, JumpIfFalse 32, LoadStack 1, LoadStack 0, CombineBinary Times, StoreStack 1, LoadStack 0, PushInt 1, CombineBinary Minus, StoreStack 0, Jump 19, PrintStr "n! = ", LoadStack 1, PrintInt, Halt]
 
     it "program fac1 compiles to the correct machine code" $ do
       prog <- readFile "resources/example-programs/fac1.olang"
-      unsafeGenerate prog `shouldBe` Right [Jump 29,PushInt 0,LoadStack 0,PushInt 0,CombineBinary Smaller,JumpIfFalse 10,LoadStack 0,PrintInt,PrintStrLn " is not a natural number!",Halt,LoadStack 0,PushInt 0,CombineBinary Equals,JumpIfFalse 16,PushInt 1,StoreStack 1,LoadStack 0,PushInt 0,CombineBinary Greater,JumpIfFalse 27,LoadStack 0,LoadStack 0,PushInt 1,CombineBinary Minus,CallProcedure 1 1,CombineBinary Times,StoreStack 1,LoadStack 1,Return True,PushInt 0,PrintStr "Please enter a natural number n: ",PushInt 0,StoreStack 0,MachineInstruction.Read,StoreStack 0,PrintStr "n! = ",LoadStack 0,CallProcedure 1 1,PrintInt,Halt]
+      unsafeGenerate prog `shouldBe` Right [Jump 29, PushInt 0, LoadStack 0, PushInt 0, CombineBinary Smaller, JumpIfFalse 10, LoadStack 0, PrintInt, PrintStrLn " is not a natural number!", Halt, LoadStack 0, PushInt 0, CombineBinary Equals, JumpIfFalse 16, PushInt 1, StoreStack 1, LoadStack 0, PushInt 0, CombineBinary Greater, JumpIfFalse 27, LoadStack 0, LoadStack 0, PushInt 1, CombineBinary Minus, CallProcedure 1 1, CombineBinary Times, StoreStack 1, LoadStack 1, Return True, PushInt 0, PrintStr "Please enter a natural number n: ", PushInt 0, StoreStack 0, MachineInstruction.Read, StoreStack 0, PrintStr "n! = ", LoadStack 0, CallProcedure 1 1, PrintInt, Halt]
 
     it "program fac2 compiles to the correct machine code" $ do
       prog <- readFile "resources/example-programs/fac2.olang"
-      unsafeGenerate prog `shouldBe` Right [Jump 14,PushInt 0,PushInt (-1),StoreStack 1,AllocateHeap 1 0,StoreStack 1,LoadStack 1,PushInt 0,StoreHeap 0,LoadStack 1,LoadStack 0,StoreHeap 0,LoadStack 1,Return True,Jump 22,LoadStack 0,LoadStack 0,LoadHeap 0,LoadStack 1,CombineBinary Times,StoreHeap 0,Return False,Jump 27,LoadStack 0,LoadHeap 0,PrintInt,Return False,PushInt 0,PushInt 0,CreateMethodTable 0 [(1,23),(0,15)],PrintStr "Please enter a natural number n: ",PushInt 0,StoreStack 0,MachineInstruction.Read,StoreStack 0,PushInt (-1),StoreStack 1,PushInt 1,CallProcedure 1 1,StoreStack 1,LoadStack 0,PushInt 0,CombineBinary Smaller,JumpIfFalse 48,LoadStack 0,PrintInt,PrintStrLn " is not a natural number!",Halt,LoadStack 0,PushInt 0,CombineBinary Greater,JumpIfFalse 60,LoadStack 1,LoadStack 0,CallMethod 0 1,LoadStack 0,PushInt 1,CombineBinary Minus,StoreStack 0,Jump 48,PrintStr "n! = ",LoadStack 1,CallMethod 1 0,Halt]
+      unsafeGenerate prog `shouldBe` Right [Jump 14, PushInt 0, PushInt (-1), StoreStack 1, AllocateHeap 1 0, StoreStack 1, LoadStack 1, PushInt 0, StoreHeap 0, LoadStack 1, LoadStack 0, StoreHeap 0, LoadStack 1, Return True, Jump 22, LoadStack 0, LoadStack 0, LoadHeap 0, LoadStack 1, CombineBinary Times, StoreHeap 0, Return False, Jump 27, LoadStack 0, LoadHeap 0, PrintInt, Return False, PushInt 0, PushInt 0, CreateMethodTable 0 [(1, 23), (0, 15)], PrintStr "Please enter a natural number n: ", PushInt 0, StoreStack 0, MachineInstruction.Read, StoreStack 0, PushInt (-1), StoreStack 1, PushInt 1, CallProcedure 1 1, StoreStack 1, LoadStack 0, PushInt 0, CombineBinary Smaller, JumpIfFalse 48, LoadStack 0, PrintInt, PrintStrLn " is not a natural number!", Halt, LoadStack 0, PushInt 0, CombineBinary Greater, JumpIfFalse 60, LoadStack 1, LoadStack 0, CallMethod 0 1, LoadStack 0, PushInt 1, CombineBinary Minus, StoreStack 0, Jump 48, PrintStr "n! = ", LoadStack 1, CallMethod 1 0, Halt]
