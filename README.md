@@ -1,3 +1,9 @@
+# ABOUT
+
+O is an imperative, statically typed and object-oriented mini-language.
+The implementation is done using the Haskell programming language.
+It provides the compiler as well as the runtime environment which is a simulated abstract machine.
+
 # HOW TO USE
 
 Save your program in a text file.
