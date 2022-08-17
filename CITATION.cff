@@ -13,3 +13,4 @@ authors:
     family-names: Maier
 repository-code: 'https://github.com/megmug/olang-bachelor-thesis'
 license: AGPL-3.0
+version: 1.0.0.0
