@@ -74,6 +74,7 @@ import SyntaxTree
     SymbolReference (FieldReference, NameReference),
     Term (..),
   )
+import Debug.Trace (traceM)
 
 {- Basic helper type definitions -}
 -- A symbol has a name, a type as well as a position in the local variable segment on the stack
@@ -367,6 +368,19 @@ calculateStackMemoryRequirement _ = 0
 {--}
 
 {- Helper generators -}
+printDebugTrace :: Show a => String -> a -> Generator ()
+printDebugTrace generatorName e = do
+  pl <- use prefixLength
+  st <- use symbolTable
+  pt <- use procedureTable
+  ct <- use classTable
+  traceM $ "current generator: " ++ generatorName ++ "\n"
+            ++ "current element to translate: " ++ show e ++ "\n"
+            ++ "current prefix length: " ++ show pl ++ "\n"
+            ++ "current symbol table: " ++ show st ++ "\n"
+            ++ "current procedure table: " ++ show pt ++ "\n"
+            ++ "current class table: " ++ show ct ++ "\n"
+
 generateMethodTableInstructions :: Generator [MachineInstruction.Instruction]
 generateMethodTableInstructions = do
   ct <- use classTable
@@ -696,7 +710,7 @@ instance Generatable Program where
       <main program instruction code>
       Halt
   -}
-  generator (Program classes procedures main) = do
+  generator p@(Program classes procedures main) = do
     {- side effects:
        - populate class table
        - add initializers to procedure table
@@ -712,6 +726,7 @@ instance Generatable Program where
     methodTableInstructions <- generateMethodTableInstructions
     prefixLength += length methodTableInstructions
     mainProgramInstructions <- generator main
+    printDebugTrace "generateMain" p
     return $
       concat classInstructions
         ++ concat procedureInstructions
@@ -754,7 +769,7 @@ instance ContextGeneratable ClassID MethodDeclaration where
         <return instructions>
    END:
   -}
-  contextGenerator classID (Method (ProcedureHeader name parameters mReturnParameter subprocedures) code) = do
+  contextGenerator classID m@(Method (ProcedureHeader name parameters mReturnParameter subprocedures) code) = do
     prefixLength += 1
     {- side effects:
        - add method to method table of class "classID"
@@ -939,7 +954,7 @@ instance Generatable SyntaxTree.Instruction where
     prefixLength += 1
     return [Halt]
   {- Composite instructions -}
-  generator (Block oInstructions) = do
+  generator b@(Block oInstructions) = do
     -- reset symbol table afterwards to implement scoping
     oldSymbolTable <- use symbolTable
     {- side effects:
@@ -947,6 +962,7 @@ instance Generatable SyntaxTree.Instruction where
        - add new symbols to symbol table
     -}
     mInstructions <- traverse generator oInstructions
+    printDebugTrace "generateBlock" b
     symbolTable .= oldSymbolTable
     return $ concat mInstructions
   {- Machine instruction layout for if-then-conditionals:
